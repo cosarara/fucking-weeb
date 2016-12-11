@@ -93,10 +93,10 @@
 (define (set-name item n)
   (set-cdr! (assoc 'name item) n))
 
-(define (get-dir item)
+(define (get-path item)
   (cdr (assoc 'path item)))
 
-(define (set-dir item n)
+(define (set-path item n)
   (set-cdr! (assoc 'path item) n))
 
 (define (save-db)
@@ -182,7 +182,7 @@
 
 (define (watch id)
   (define item (get-item db id))
-  (define dir (get-dir item))
+  (define dir (get-path item))
   (find-ep dir (get-curr-ep item))
   (printf "watch ~A ~A~%" (get-name item) (get-curr-ep item)))
 
@@ -334,7 +334,7 @@
   (define total (or (string->number (gtk_entry_get_text total-entry)) (max curr 24)))
   (define item (get-item db id))
   (set-name item name)
-  (set-dir item (get-selected-path))
+  (set-path item (get-selected-path))
   (set-curr-ep item curr)
   (set-total-eps item total)
   (build-view-screen window id))
@@ -356,7 +356,7 @@
 
   (define item (get-item db id))
 
-  (add-edit-buttons form (get-name item) (get-dir item)
+  (add-edit-buttons form (get-name item) (get-path item)
                     (number->string (get-curr-ep item))
                     (number->string (get-total-eps item)))
 
