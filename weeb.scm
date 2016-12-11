@@ -67,14 +67,14 @@
 
 (define (add-item db curr total name path video-player cover)
   (define item
-    `(((curr . ,curr)
-       (total . ,total)
-       (name . ,name)
-       (path . ,path))))
+    `((curr . ,curr)
+      (total . ,total)
+      (name . ,name)
+      (path . ,path)))
   (set-video-player item video-player)
   (set-cover item cover)
 
-  (set! db (append! (assoc 'items db) item)))
+  (set! db (append! (assoc 'items db) (list item))))
 
 (define (remove-item db n)
   (define items (get-item-list db))
@@ -297,9 +297,12 @@
   (define total (or (string->number (gtk_entry_get_text total-entry))
                     (max curr 24)))
   (define video-player (gtk_entry_get_text video-player-entry))
+  (define cover selected-image-path)
   (add-item db curr total name
     (or selected-path
-        (get-default-path db)))
+        (get-default-path db))
+    video-player
+    cover)
   (build-main-screen window))
 
 (define (prettify name)
@@ -352,7 +355,11 @@
                       tmdb name tmdb-key))
   (print url)
   (define response
-    (read-json (with-input-from-request url #f read-string)))
+    (condition-case
+      (read-json (with-input-from-request url #f read-string))
+      [(exn http) (begin
+                   (gtk-warn "HTTP error")
+                   '((results . #())))]))
   ;(print response)
   (define results (cdr (assoc 'results response)))
   (if (= 0 (vector-length results))
@@ -799,8 +806,10 @@
   (gtk_box_pack_start main-box title-box 0 1 5)
 
   ; search bar
+  (define search-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (gtk_box_pack_start main-box search-box 0 1 5)
   (set! search-bar (gtk_search_entry_new))
-  (gtk_box_pack_start main-box search-bar 0 1 5)
+  (gtk_box_pack_start search-box search-bar 1 1 5)
   (g_signal_connect search-bar "search-changed" #$search_changed #f)
 
   (define scrollable (gtk_scrolled_window_new #f #f))
@@ -816,10 +825,11 @@
 
   (build-button-box)
 
-  (define pbutton (gtk_button_new_with_label "+"))
-  (g_signal_connect pbutton "clicked" #$go_add #f)
-  ;(gtk_container_add button-box hbutton)
-  (gtk_box_pack_end main-box pbutton 0 1 0)
+  (define add-button (gtk_button_new_from_icon_name
+                       "gtk-add"
+                       GTK_ICON_SIZE_BUTTON))
+  (g_signal_connect add-button "clicked" #$go_add #f)
+  (gtk_box_pack_end search-box add-button 0 1 0)
 
   (gtk_widget_show_all window))
 
@@ -847,7 +857,7 @@
 (g_signal_connect window "destroy" #$destroy #f)
 (gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
 (gtk_window_set_title window app-title)
-(gtk_window_set_default_size window 480 600)
+(gtk_window_set_default_size window 570 600)
 (build-main-screen window)
 
 (gtk_main)
