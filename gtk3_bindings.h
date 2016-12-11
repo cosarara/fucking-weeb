@@ -144,6 +144,10 @@ gtk_box_pack_end (GtkBox *box,
                   gboolean fill,
                   guint padding);
 
+void
+gtk_box_set_center_widget (GtkBox *box,
+                           GtkWidget *widget);
+
 GtkWidget *
 gtk_label_new (const gchar *str);
 

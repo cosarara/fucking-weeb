@@ -4,6 +4,9 @@
 (use srfi-13)
 (use posix)
 (use irregex)
+(use http-client)
+(use uri-common)
+(use medea)
 
 (define app-title "Fucking weeb")
 
@@ -128,27 +131,34 @@
 (define xdg-app-name "fucking-weeb")
 
 (define xdg-config
-  (ensure-trailing-slash
-    (or (get-environment-variable "XDG_CONFIG_HOME")
-        ; I shall assume $HOME is always defined
-        (format "~A/.config" (get-environment-variable "HOME")))))
+  (create-directory
+    (format #f "~A~A/"
+            (ensure-trailing-slash
+              (or (get-environment-variable "XDG_CONFIG_HOME")
+                  ; I shall assume $HOME is always defined
+                  (format "~A/.config"
+                          (get-environment-variable "HOME"))))
+            xdg-app-name)))
 
 (define xdg-data
-  (ensure-trailing-slash
-    (or (get-environment-variable "XDG_DATA_HOME")
-        ; I shall assume $HOME is always defined
-        (format "~A/.local/share" (get-environment-variable "HOME")))))
+  (create-directory
+    (format #f "~A~A/"
+            (ensure-trailing-slash
+              (or (get-environment-variable "XDG_DATA_HOME")
+                  ; I shall assume $HOME is always defined
+                  (format "~A/.local/share"
+                          (get-environment-variable "HOME"))))
+            xdg-app-name)))
 
 (define (save-db)
-  (define dir (create-directory (format #f "~A~A/" xdg-config xdg-app-name)))
-  (call-with-output-file (format #f "~Adb" dir)
+  (call-with-output-file (format #f "~Adb" xdg-config)
    (lambda (port)
      (write db port)
      (newline port))))
 
 (define (load-db)
   ; todo: check version and error out
-  (define path (format #f "~A~A/db" xdg-config xdg-app-name))
+  (define path (format #f "~A/db" xdg-config))
   (call-with-input-file path
     (lambda (port)
       (set! db (read port)))))
@@ -271,6 +281,7 @@
 (define name-entry #f)
 (define selected-path #f)
 (define selected-image-path #f)
+(define image-path-picker #f)
 
 (define curr-entry #f)
 (define total-entry #f)
@@ -317,6 +328,67 @@
   (set! selected-image-path
     (gtk_file_chooser_get_filename widget)))
 
+(define tmdb "https://api.themoviedb.org/3/")
+(define tmdb-key "api_key=fd7b3b3e7939e8eb7c8e26836b8ea410")
+(define base-url #f)
+
+(define (get-extension fn)
+  (define m (irregex-search "\\..*" fn))
+  (if m (irregex-match-substring m) ""))
+
+(define (clean-name name) ; for search
+  (string-trim-both (irregex-replace/all "\\(.*\\)" name "")))
+
+(define-external
+  (image_download
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define name (uri-encode-string (clean-name
+                                    (gtk_entry_get_text name-entry))))
+  (define file-name (format #f "~A~A" xdg-data name)) ;missing ext
+  (print name)
+  (define url (format #f "~Asearch/multi?query=~A&~A"
+                      tmdb name tmdb-key))
+  (print url)
+  (define response
+    (read-json (with-input-from-request url #f read-string)))
+  ;(print response)
+  (define results (cdr (assoc 'results response)))
+  (if (= 0 (vector-length results))
+    (print "no results") ; todo error out
+    (begin
+      (define result (vector-ref results 0))
+      (define poster-path (cdr (assoc 'poster_path result)))
+      (if (not base-url)
+        (begin
+          (define url (format #f "~Aconfiguration?~A"
+                              tmdb tmdb-key))
+          (define config
+            (read-json
+              (with-input-from-request url #f read-string)))
+          (set! base-url
+            (cdr (assoc 'base_url (cdr (assoc 'images config)))))))
+      (define image-url (format #f "~Aoriginal~A"
+                                base-url poster-path))
+      (print image-url)
+      (set! file-name (format #f "~A~A" file-name
+                              (get-extension poster-path)))
+      (print file-name)
+      (print "ai ai")
+      (call-with-input-request
+        image-url #f
+        (lambda (rport)
+          (call-with-output-file file-name
+            (lambda (wport)
+              (do ((byte (read-byte rport) (read-byte rport)))
+                  ((eof-object? byte) #f)
+                (write-byte byte wport))))))
+      (print "ai ai!!")
+
+      (gtk_file_chooser_set_filename image-path-picker file-name)
+      (set! selected-image-path file-name))))
+
 (define (add-edit-buttons form name path curr total video-player cover)
   (define name-label (gtk_label_new "Name:"))
   (gtk_label_set_xalign name-label 1)
@@ -346,7 +418,7 @@
   (gtk_label_set_xalign image-path-label 1)
   ;(set! image-path-entry (gtk_entry_new))
   ;(gtk_entry_set_text image-path-entry "image path here")
-  (define image-path-picker
+  (set! image-path-picker
     (gtk_file_chooser_button_new "Select the cover image"
                                  GTK_FILE_CHOOSER_ACTION_OPEN))
   (if cover
@@ -359,6 +431,7 @@
   (gtk_file_chooser_add_filter image-path-picker image-filter)
   (gtk_widget_set_hexpand image-path-picker 1)
   (define fetch-image-button (gtk_button_new_with_label "Download"))
+  (g_signal_connect fetch-image-button "clicked" #$image_download #f)
   (gtk_grid_attach form image-path-label 0 2 1 1)
   (gtk_grid_attach form image-path-picker 1 2 2 1)
   (gtk_grid_attach form fetch-image-button 3 2 1 1)
@@ -502,9 +575,21 @@
   (define id (data->id data))
   (build-edit-screen window id))
 
+(define (make-title-label text)
+  (define title-label (gtk_label_new text))
+  ;(gtk_label_set_xalign title-label 0)
+  (define title-attrs (pango_attr_list_new))
+  (define attr-weight (pango_attr_weight_new PANGO_WEIGHT_BOLD))
+  (pango_attr_list_insert title-attrs attr-weight)
+  (define attr-scale (pango_attr_scale_new 1.5))
+  (pango_attr_list_insert title-attrs attr-scale)
+  (gtk_label_set_attributes title-label title-attrs)
+  ; should I actually free this myself? it segfaults! scary scary
+  ;(pango_attribute_destroy attr)
+  (pango_attr_list_unref title-attrs)
+  title-label)
+
 (define (build-view-screen window id)
-  ; TODO:
-  ; make title bigger, put edit and delete icons at it's side
   (clean window)
   (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
   (gtk_box_set_spacing box 10)
@@ -515,8 +600,26 @@
   (gtk_container_add window box)
 
   (define item (get-item db id))
-  (define label (gtk_label_new (get-name item)))
-  (gtk_box_pack_start box label 1 1 5)
+
+  (define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (define title-label (make-title-label (get-name item)))
+  (gtk_box_set_center_widget title-box title-label)
+
+  (define remove-button (gtk_button_new_from_icon_name
+                          "gtk-remove"
+                          GTK_ICON_SIZE_BUTTON))
+  (gtk_box_pack_end title-box remove-button 0 1 3)
+  (g_signal_connect remove-button "clicked" #$remove_button
+                    (address->pointer id))
+
+  (define edit-button (gtk_button_new_from_icon_name
+                        "gtk-edit"
+                        GTK_ICON_SIZE_BUTTON))
+  (gtk_box_pack_end title-box edit-button 0 1 0)
+  (g_signal_connect edit-button "clicked" #$edit_button
+                    (address->pointer id))
+
+  (gtk_box_pack_start box title-box 0 1 5)
 
   (define cover (get-cover item))
   (if cover
@@ -551,12 +654,6 @@
   (define button (gtk_button_new_with_label "Watch Next"))
   (g_signal_connect button "clicked" #$watch_next_button (address->pointer id))
   (gtk_box_pack_start box button 0 1 2)
-  (define button (gtk_button_new_with_label "Edit"))
-  (gtk_box_pack_start box button 0 1 2)
-  (g_signal_connect button "clicked" #$edit_button (address->pointer id))
-  (define button (gtk_button_new_with_label "Remove"))
-  (gtk_box_pack_start box button 0 1 2)
-  (g_signal_connect button "clicked" #$remove_button (address->pointer id))
   (define bbutton (gtk_button_new_with_label "Back"))
   (gtk_widget_set_margin_top bbutton 20)
   (gtk_box_pack_end box bbutton 0 1 2)
@@ -692,22 +789,13 @@
 
   ; Title and settings
   (define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
-  (define title-label (gtk_label_new app-title))
-  (define title-attrs (pango_attr_list_new))
-  (define attr-weight (pango_attr_weight_new PANGO_WEIGHT_BOLD))
-  (pango_attr_list_insert title-attrs attr-weight)
-  (define attr-scale (pango_attr_scale_new 1.5))
-  (pango_attr_list_insert title-attrs attr-scale)
-  (gtk_label_set_attributes title-label title-attrs)
-  ; should I actually free this myself? it segfaults! scary scary
-  ;(pango_attribute_destroy attr)
-  (pango_attr_list_unref title-attrs)
-  (gtk_box_pack_start title-box title-label 1 1 10)
+  (define title-label (make-title-label app-title))
+  (gtk_box_set_center_widget title-box title-label)
   (define settings-button (gtk_button_new_from_icon_name
                             "gtk-preferences"
                             GTK_ICON_SIZE_BUTTON))
   (g_signal_connect settings-button "clicked" #$go_settings #f)
-  (gtk_box_pack_start title-box settings-button 0 1 0)
+  (gtk_box_pack_end title-box settings-button 0 1 0)
   (gtk_box_pack_start main-box title-box 0 1 5)
 
   ; search bar
