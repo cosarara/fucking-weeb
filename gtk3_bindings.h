@@ -64,6 +64,25 @@ typedef double  gdouble;
 GtkApplication* gtk_application_new
 (const gchar *application_id, GApplicationFlags flags);
 
+void
+gtk_init (int *argc,
+          char ***argv);
+
+___safe void
+gtk_main (void);
+
+void
+gtk_main_quit (void);
+
+typedef enum
+{
+  GTK_WINDOW_TOPLEVEL,
+  GTK_WINDOW_POPUP
+} GtkWindowType;
+
+GtkWidget *
+gtk_window_new (GtkWindowType type);
+
 int g_signal_connect(void *, char *, void *, void *);
 int g_signal_connect_swapped(void *, char *, void *, void *);
 
@@ -330,6 +349,23 @@ gtk_scrolled_window_new (GtkAdjustment *hadjustment,
 GtkWidget *
 gtk_viewport_new (GtkAdjustment *hadjustment,
                   GtkAdjustment *vadjustment);
+
+GtkWidget *
+gtk_search_entry_new (void);
+
+typedef void* gpointer;
+
+typedef struct _GList
+{
+  gpointer data;
+  GList *next;
+  GList *prev;
+} GList;
+
+void g_list_free (GList *list);
+
+GList *
+gtk_container_get_children (GtkContainer *container);
 
 // pango
 

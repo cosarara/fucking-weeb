@@ -126,14 +126,16 @@
 
 (bind-file "gtk3_bindings.h")
 
-(define app (gtk_application_new "org.gtk.example"
-                                 G_APPLICATION_FLAGS_NONE))
-
-(define window #f)
-
 (define (clean window)
   (define child (gtk_bin_get_child window))
   (if child (gtk_widget_destroy child) #f))
+
+(define (clean-box box)
+  (define children (gtk_container_get_children box))
+  (do ((iter children (_GList-next iter)))
+      ((not iter) #f)
+    (gtk_widget_destroy (_GList-data iter)))
+  (g_list_free children))
 
 (define-external
   (go_back
@@ -549,27 +551,59 @@
   void
   (build-settings-screen window))
 
+(define search-bar #f)
+
+(define-external
+  (search_changed
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (build-button-box)
+  (gtk_widget_show_all window))
+
+(define button-box #f)
+
+(define (build-button-box)
+  (clean-box button-box)
+
+  (define regex (irregex (gtk_entry_get_text search-bar) 'i))
+  (define (search-filter item)
+    (irregex-search regex (get-name item)))
+
+  (define items (filter search-filter (get-item-list db)))
+
+  (define i 0)
+  (for-each
+    (lambda (item)
+      (define vbutton (gtk_button_new_with_label (get-name item)))
+      (define data i)
+      (g_signal_connect vbutton "clicked" #$go_view
+                        (address->pointer data))
+      ;(gtk_container_add button-box vbutton)
+      (gtk_box_pack_start button-box vbutton 0 1 5)
+      (set! i (+ i 1)))
+    items)
+  (define hbutton (gtk_button_new_with_label "+"))
+  (g_signal_connect hbutton "clicked" #$go_add #f)
+  ;(gtk_container_add button-box hbutton)
+  (gtk_box_pack_end button-box hbutton 0 1 5))
+
 (define (build-main-screen window)
   (clean window)
 
-  (define scrollable (gtk_scrolled_window_new #f #f))
-  (define viewport (gtk_viewport_new #f #f))
+  (define main-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
 
-  (gtk_container_add scrollable viewport)
-  (gtk_container_add window scrollable)
+  (gtk_container_add window main-box)
 
-  (define button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  ;(gtk_container_add window scrollable)
 
-  (gtk_container_add viewport button-box)
+  (gtk_box_set_spacing main-box 20)
+  (gtk_widget_set_margin_top main-box 20)
+  (gtk_widget_set_margin_start main-box 20)
+  (gtk_widget_set_margin_end main-box 20)
+  (gtk_widget_set_margin_bottom main-box 20)
 
-  (gtk_box_set_spacing button-box 20)
-  (gtk_widget_set_margin_top button-box 20)
-  (gtk_widget_set_margin_start button-box 20)
-  (gtk_widget_set_margin_end button-box 20)
-  (gtk_widget_set_margin_bottom button-box 20)
-
-  (gtk_container_add window button-box)
-
+  ; Title and settings
   (define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define title-label (gtk_label_new app-title))
   (define title-attrs (pango_attr_list_new))
@@ -587,45 +621,46 @@
                             GTK_ICON_SIZE_BUTTON))
   (g_signal_connect settings-button "clicked" #$go_settings #f)
   (gtk_box_pack_start title-box settings-button 0 1 0)
-  (gtk_box_pack_start button-box title-box 0 1 5)
+  (gtk_box_pack_start main-box title-box 0 1 5)
 
-  (define i 0)
-  (for-each
-    (lambda (item)
-      (print "kabum")
-      (print item)
-      (print db)
-      (define vbutton (gtk_button_new_with_label (get-name item)))
-      (define data i)
-      (g_signal_connect vbutton "clicked" #$go_view
-                        (address->pointer data))
-      ;(gtk_container_add button-box vbutton)
-      (gtk_box_pack_start button-box vbutton 0 1 5)
-      (set! i (+ i 1)))
-    (get-item-list db))
-  (define hbutton (gtk_button_new_with_label "+"))
-  (g_signal_connect hbutton "clicked" #$go_add #f)
-  ;(gtk_container_add button-box hbutton)
-  (gtk_box_pack_end button-box hbutton 0 1 5)
+  ; search bar
+  (set! search-bar (gtk_search_entry_new))
+  (gtk_box_pack_start main-box search-bar 0 1 5)
+  (g_signal_connect search-bar "search-changed" #$search_changed #f)
+
+  (define scrollable (gtk_scrolled_window_new #f #f))
+  (define viewport (gtk_viewport_new #f #f))
+  (gtk_container_add scrollable viewport)
+
+  (gtk_box_pack_start main-box scrollable 1 1 5)
+
+  (set! button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (gtk_container_add viewport button-box)
+
+  (gtk_box_set_spacing button-box 20)
+
+  (build-button-box)
+
   (gtk_widget_show_all window))
 
 (define-external
-  (activate
-    ((pointer "GtkApplication") app)
+  (destroy
+    ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  (set! window (gtk_application_window_new app))
-  (gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
-  (gtk_window_set_title window app-title)
-  (gtk_window_set_default_size window 300 500)
-  (build-main-screen window))
-
-(g_signal_connect app "activate" #$activate #f)
+  (gtk_main_quit))
 
 (condition-case (load-db)
   [(exn file i/o) (print "couldn't load file")])
-(define status (g_application_run app 0 #f))
-(save-db)
+(gtk_init #f #f)
+(define window (gtk_window_new GTK_WINDOW_TOPLEVEL))
+(g_signal_connect window "destroy" #$destroy #f)
+(gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
+(gtk_window_set_title window app-title)
+(gtk_window_set_default_size window 300 500)
+(build-main-screen window)
 
-(g_object_unref app)
+(gtk_main)
+
+(save-db)
 
