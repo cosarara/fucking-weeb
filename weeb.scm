@@ -111,16 +111,34 @@
       (set-cdr! (assoc 'video-player item) v)
       (set! item (append! item (list (cons 'video-player v)))))))
 
+(define (ensure-trailing-slash dir) (irregex-replace "/*$" dir "/"))
+
+(define xdg-app-name "fucking-weeb")
+
+(define xdg-config
+  (ensure-trailing-slash
+    (or (get-environment-variable "XDG_CONFIG_HOME")
+        ; I shall assume $HOME is always defined
+        (format "~A/.config" (get-environment-variable "HOME")))))
+
+(define xdg-data
+  (ensure-trailing-slash
+    (or (get-environment-variable "XDG_DATA_HOME")
+        ; I shall assume $HOME is always defined
+        (format "~A/.local/share" (get-environment-variable "HOME")))))
+
 (define (save-db)
-  (call-with-output-file "db"
+  (define dir (create-directory (format #f "~A~A/" xdg-config xdg-app-name)))
+  (call-with-output-file (format #f "~Adb" dir)
    (lambda (port)
      (write db port)
      (newline port))))
 
 (define (load-db)
   ; todo: check version and error out
-    (call-with-input-file "db"
-     (lambda (port)
+  (define path (format #f "~A~A/db" xdg-config xdg-app-name))
+  (call-with-input-file path
+    (lambda (port)
       (set! db (read port)))))
 
 (foreign-declare "#include <gtk/gtk.h>")
@@ -166,7 +184,7 @@
   (build-add-screen window))
 
 (define (find-ep dir num)
-  (set! dir (irregex-replace "/*$" dir "/")) ; always 1 trailing slash
+  (set! dir (ensure-trailing-slash dir))
   (if (not (directory? dir))
     (print "error: not a directory")
     (begin
@@ -301,7 +319,7 @@
   (gtk_grid_attach form path-label 0 1 1 1)
   (gtk_grid_attach form path-picker 1 1 3 1)
 
-  (define eps-label (gtk_label_new "Current episode:"))
+  (define eps-label (gtk_label_new "Current Episode:"))
   (gtk_label_set_xalign eps-label 1)
   (set! curr-entry (gtk_entry_new))
   (gtk_entry_set_text curr-entry curr)
@@ -665,10 +683,20 @@
   void
   (gtk_main_quit))
 
-(condition-case (load-db)
-  [(exn file i/o) (print "couldn't load file")])
+(define (gtk-warn message)
+  (define dialog (gtk_message_dialog_new
+                  window
+                  0
+                  GTK_MESSAGE_WARNING
+                  GTK_BUTTONS_OK
+                  message))
+  (gtk_dialog_run dialog)
+  (gtk_widget_destroy dialog))
+
 (gtk_init #f #f)
 (define window (gtk_window_new GTK_WINDOW_TOPLEVEL))
+(condition-case (load-db)
+  [(exn file i/o) (gtk-warn "Couldn't load the database file; using sample")])
 (g_signal_connect window "destroy" #$destroy #f)
 (gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
 (gtk_window_set_title window app-title)
