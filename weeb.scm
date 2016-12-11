@@ -339,16 +339,11 @@
   (define m (irregex-search "\\..*" fn))
   (if m (irregex-match-substring m) ""))
 
-(define (clean-name name) ; for search
+(define (clean-name name) ; for tmdb search
   (string-trim-both (irregex-replace/all "\\(.*\\)" name "")))
 
-(define-external
-  (image_download
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (define name (uri-encode-string (clean-name
-                                    (gtk_entry_get_text name-entry))))
+(define (download-image dirty-name)
+  (define name (uri-encode-string (clean-name dirty-name)))
   (define file-name (format #f "~A~A" xdg-data name)) ;missing ext
   (print name)
   (define url (format #f "~Asearch/multi?query=~A&~A"
@@ -363,7 +358,7 @@
   ;(print response)
   (define results (cdr (assoc 'results response)))
   (if (= 0 (vector-length results))
-    (print "no results") ; todo error out
+    #f ; todo error out
     (begin
       (define result (vector-ref results 0))
       (define poster-path (cdr (assoc 'poster_path result)))
@@ -382,7 +377,7 @@
       (set! file-name (format #f "~A~A" file-name
                               (get-extension poster-path)))
       (print file-name)
-      (print "ai ai")
+      (print "downloading...")
       (call-with-input-request
         image-url #f
         (lambda (rport)
@@ -391,10 +386,21 @@
               (do ((byte (read-byte rport) (read-byte rport)))
                   ((eof-object? byte) #f)
                 (write-byte byte wport))))))
-      (print "ai ai!!")
+      (print "downloaded!")
+      file-name)))
 
+(define-external
+  (image_download
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define file-name
+    (download-image (gtk_entry_get_text name-entry)))
+  (if file-name
+    (begin
       (gtk_file_chooser_set_filename image-path-picker file-name)
-      (set! selected-image-path file-name))))
+      (set! selected-image-path file-name))
+    (print "couldn't get image"))) ; todo handle this better
 
 (define (add-edit-buttons form name path curr total video-player cover)
   (define name-label (gtk_label_new "Name:"))
@@ -631,7 +637,6 @@
   (define cover (get-cover item))
   (if cover
     (begin
-     (print "displaying cover")
      (define pixbuf (gdk_pixbuf_new_from_file_at_size
                       cover 200 200 #f))
      (if pixbuf
@@ -754,6 +759,16 @@
   (define regex (irregex (gtk_entry_get_text search-bar) 'i))
   (define (search-filter item)
     (irregex-search regex (get-name item)))
+
+  ; download missing
+  ;(map (lambda (item)
+  ;       (if (not (get-cover item))
+  ;         (begin
+  ;           (format #t "Downloading cover for ~A~%" (get-name item))
+  ;           (define image-path (download-image (get-name item)))
+  ;           (print image-path)
+  ;           (if image-path (set-cover item image-path))))
+  ;     (get-item-list db)))
 
   ; add ids
   (define i 0)
