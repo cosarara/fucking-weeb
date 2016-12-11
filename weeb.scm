@@ -218,7 +218,6 @@
   (set-curr-ep item new-val))
 
 (define name-entry #f)
-(define path-entry #f)
 (define selected-path #f)
 
 (define (get-selected-path)
@@ -246,7 +245,13 @@
     (c-pointer data))
   void
   (set! selected-path
-    (gtk_file_chooser_get_filename widget)))
+    (gtk_file_chooser_get_filename widget))
+  (if (equal? "" (gtk_entry_get_text name-entry))
+    (begin
+      (define parts (irregex-split "/" selected-path))
+      (if (not (null? parts))
+        (gtk_entry_set_text name-entry (last parts))))))
+  ; TODO: automagically set number of episodes
 
 (define (add-edit-buttons form name path curr total)
   (define name-label (gtk_label_new "Name:"))
