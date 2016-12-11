@@ -1,6 +1,7 @@
 (require-extension bind)
 (use lolevel)
 (use srfi-1)
+(use srfi-13)
 (use posix)
 (use irregex)
 
@@ -258,6 +259,9 @@
         (get-default-path db)))
   (build-main-screen window))
 
+(define (prettify name)
+  (string-titlecase (irregex-replace/all "_|-" name " ")))
+
 (define-external
   (path_picked
     ((pointer "GtkWidget") widget)
@@ -269,7 +273,7 @@
     (begin
       (define parts (irregex-split "/" selected-path))
       (if (not (null? parts))
-        (gtk_entry_set_text name-entry (last parts))))))
+        (gtk_entry_set_text name-entry (prettify (last parts)))))))
   ; TODO: automagically set number of episodes
 
 (define (add-edit-buttons form name path curr total video-player)
@@ -464,19 +468,19 @@
 
   (gtk_widget_set_halign progress-box GTK_ALIGN_CENTER)
 
-  (define button (gtk_button_new_with_label "watch"))
+  (define button (gtk_button_new_with_label "Watch"))
   (g_signal_connect button "clicked" #$watch_button (address->pointer id))
   (gtk_box_pack_start box button 0 1 2)
-  (define button (gtk_button_new_with_label "watch next"))
+  (define button (gtk_button_new_with_label "Watch Next"))
   (g_signal_connect button "clicked" #$watch_next_button (address->pointer id))
   (gtk_box_pack_start box button 0 1 2)
-  (define button (gtk_button_new_with_label "edit"))
+  (define button (gtk_button_new_with_label "Edit"))
   (gtk_box_pack_start box button 0 1 2)
   (g_signal_connect button "clicked" #$edit_button (address->pointer id))
-  (define button (gtk_button_new_with_label "remove"))
+  (define button (gtk_button_new_with_label "Remove"))
   (gtk_box_pack_start box button 0 1 2)
   (g_signal_connect button "clicked" #$remove_button (address->pointer id))
-  (define bbutton (gtk_button_new_with_label "back"))
+  (define bbutton (gtk_button_new_with_label "Back"))
   (gtk_widget_set_margin_top bbutton 20)
   (gtk_box_pack_end box bbutton 0 1 2)
   (g_signal_connect bbutton "clicked" #$go_back #f)
@@ -592,11 +596,7 @@
                         (address->pointer data))
       ;(gtk_container_add button-box vbutton)
       (gtk_box_pack_start button-box vbutton 0 1 5))
-    items)
-  (define hbutton (gtk_button_new_with_label "+"))
-  (g_signal_connect hbutton "clicked" #$go_add #f)
-  ;(gtk_container_add button-box hbutton)
-  (gtk_box_pack_end button-box hbutton 0 1 5))
+    items))
 
 (define (build-main-screen window)
   (clean window)
@@ -642,7 +642,7 @@
   (define viewport (gtk_viewport_new #f #f))
   (gtk_container_add scrollable viewport)
 
-  (gtk_box_pack_start main-box scrollable 1 1 5)
+  (gtk_box_pack_start main-box scrollable 1 1 0)
 
   (set! button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
   (gtk_container_add viewport button-box)
@@ -650,6 +650,11 @@
   (gtk_box_set_spacing button-box 20)
 
   (build-button-box)
+
+  (define pbutton (gtk_button_new_with_label "+"))
+  (g_signal_connect pbutton "clicked" #$go_add #f)
+  ;(gtk_container_add button-box hbutton)
+  (gtk_box_pack_end main-box pbutton 0 1 0)
 
   (gtk_widget_show_all window))
 
@@ -667,7 +672,7 @@
 (g_signal_connect window "destroy" #$destroy #f)
 (gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
 (gtk_window_set_title window app-title)
-(gtk_window_set_default_size window 300 500)
+(gtk_window_set_default_size window 480 600)
 (build-main-screen window)
 
 (gtk_main)
