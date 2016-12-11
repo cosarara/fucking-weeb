@@ -580,7 +580,9 @@
              new-item))
          (get-item-list db)))
 
-  (define items (filter search-filter items))
+  (define items (sort (filter search-filter items)
+                  (lambda (a b) (string<? (get-name a)
+                                          (get-name b)))))
 
   (for-each
     (lambda (item)
