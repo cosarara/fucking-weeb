@@ -342,6 +342,21 @@ gboolean
 gtk_file_chooser_set_uri (GtkFileChooser *chooser,
                           const char *uri);
 
+GtkFileFilter *
+gtk_file_filter_new (void);
+
+void
+gtk_file_filter_set_name (GtkFileFilter *filter,
+                          const gchar *name);
+
+void
+gtk_file_filter_add_mime_type (GtkFileFilter *filter,
+                               const gchar *mime_type);
+
+void
+gtk_file_chooser_add_filter (GtkFileChooser *chooser,
+                             GtkFileFilter *filter);
+
 GtkWidget *
 gtk_scrolled_window_new (GtkAdjustment *hadjustment,
                          GtkAdjustment *vadjustment);
@@ -366,6 +381,22 @@ void g_list_free (GList *list);
 
 GList *
 gtk_container_get_children (GtkContainer *container);
+
+GtkWidget *
+gtk_image_new_from_file (const gchar *filename);
+
+GdkPixbuf *
+gdk_pixbuf_new_from_file_at_size (const char *filename,
+                                  int width,
+                                  int height,
+                                  GError **error);
+
+GtkWidget *
+gtk_image_new_from_pixbuf (GdkPixbuf *pixbuf);
+
+GtkWidget *
+gtk_image_new_from_icon_name (const gchar *icon_name,
+                              GtkIconSize size);
 
 // pango
 

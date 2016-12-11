@@ -62,12 +62,16 @@
 (define (get-item db id)
   (list-ref (cdr (assoc 'items db)) id))
 
-(define (add-item db curr total name path)
-  (set! db (append! (assoc 'items db)
-                    `(((curr . ,curr)
-                       (total . ,total)
-                       (name . ,name)
-                       (path . ,path))))))
+(define (add-item db curr total name path video-player cover)
+  (define item
+    `(((curr . ,curr)
+       (total . ,total)
+       (name . ,name)
+       (path . ,path))))
+  (set-video-player item video-player)
+  (set-cover item cover)
+
+  (set! db (append! (assoc 'items db) item)))
 
 (define (remove-item db n)
   (define items (get-item-list db))
@@ -110,6 +114,14 @@
     (if (get-video-player item)
       (set-cdr! (assoc 'video-player item) v)
       (set! item (append! item (list (cons 'video-player v)))))))
+
+(define (get-cover item)
+  (define p (assoc 'cover item))
+  (and p (cdr p)))
+
+(define (set-cover item v)
+  (set! item (alist-delete! 'cover item))
+  (set! item (append! item (list (cons 'cover v)))))
 
 (define (ensure-trailing-slash dir) (irregex-replace "/*$" dir "/"))
 
@@ -258,6 +270,7 @@
 
 (define name-entry #f)
 (define selected-path #f)
+(define selected-image-path #f)
 
 (define curr-entry #f)
 (define total-entry #f)
@@ -272,6 +285,7 @@
   (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
   (define total (or (string->number (gtk_entry_get_text total-entry))
                     (max curr 24)))
+  (define video-player (gtk_entry_get_text video-player-entry))
   (add-item db curr total name
     (or selected-path
         (get-default-path db)))
@@ -287,6 +301,7 @@
   void
   (set! selected-path
     (gtk_file_chooser_get_filename widget))
+  ; todo: copy string to scheme then free c string with g_free
   (if (equal? "" (gtk_entry_get_text name-entry))
     (begin
       (define parts (irregex-split "/" selected-path))
@@ -294,7 +309,15 @@
         (gtk_entry_set_text name-entry (prettify (last parts)))))))
   ; TODO: automagically set number of episodes
 
-(define (add-edit-buttons form name path curr total video-player)
+(define-external
+  (image_picked
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (set! selected-image-path
+    (gtk_file_chooser_get_filename widget)))
+
+(define (add-edit-buttons form name path curr total video-player cover)
   (define name-label (gtk_label_new "Name:"))
   (gtk_label_set_xalign name-label 1)
   (set! name-entry (gtk_entry_new))
@@ -319,6 +342,27 @@
   (gtk_grid_attach form path-label 0 1 1 1)
   (gtk_grid_attach form path-picker 1 1 3 1)
 
+  (define image-path-label (gtk_label_new "Cover Image Path:"))
+  (gtk_label_set_xalign image-path-label 1)
+  ;(set! image-path-entry (gtk_entry_new))
+  ;(gtk_entry_set_text image-path-entry "image path here")
+  (define image-path-picker
+    (gtk_file_chooser_button_new "Select the cover image"
+                                 GTK_FILE_CHOOSER_ACTION_OPEN))
+  (if cover
+    (gtk_file_chooser_set_filename image-path-picker cover))
+  (set! selected-path #f)
+  (g_signal_connect image-path-picker "file-set" #$image_picked #f)
+  (define image-filter (gtk_file_filter_new))
+  (gtk_file_filter_add_mime_type image-filter "image/*")
+  (gtk_file_filter_set_name image-filter "Image File")
+  (gtk_file_chooser_add_filter image-path-picker image-filter)
+  (gtk_widget_set_hexpand image-path-picker 1)
+  (define fetch-image-button (gtk_button_new_with_label "Download"))
+  (gtk_grid_attach form image-path-label 0 2 1 1)
+  (gtk_grid_attach form image-path-picker 1 2 2 1)
+  (gtk_grid_attach form fetch-image-button 3 2 1 1)
+
   (define eps-label (gtk_label_new "Current Episode:"))
   (gtk_label_set_xalign eps-label 1)
   (set! curr-entry (gtk_entry_new))
@@ -328,18 +372,18 @@
   (set! total-entry (gtk_entry_new))
   (gtk_entry_set_text total-entry total)
   (gtk_widget_set_hexpand total-entry 1)
-  (gtk_grid_attach form eps-label 0 2 1 1)
-  (gtk_grid_attach form curr-entry 1 2 1 1)
-  (gtk_grid_attach form eps-slash 2 2 1 1)
-  (gtk_grid_attach form total-entry 3 2 1 1)
+  (gtk_grid_attach form eps-label 0 3 1 1)
+  (gtk_grid_attach form curr-entry 1 3 1 1)
+  (gtk_grid_attach form eps-slash 2 3 1 1)
+  (gtk_grid_attach form total-entry 3 3 1 1)
 
   (define video-player-label (gtk_label_new "Video Player:"))
   (gtk_label_set_xalign video-player-label 1)
   (set! video-player-entry (gtk_entry_new))
   (gtk_entry_set_text video-player-entry video-player)
   (gtk_widget_set_hexpand video-player-entry 1)
-  (gtk_grid_attach form video-player-label 0 3 1 1)
-  (gtk_grid_attach form video-player-entry 1 3 3 1))
+  (gtk_grid_attach form video-player-label 0 4 1 1)
+  (gtk_grid_attach form video-player-entry 1 4 3 1))
 
 
 (define (build-add-screen window)
@@ -357,7 +401,7 @@
   (gtk_grid_set_row_spacing form 10)
   (gtk_box_pack_start box form 1 1 5)
 
-  (add-edit-buttons form "" (get-default-path db) "1" "24" "")
+  (add-edit-buttons form "" (get-default-path db) "1" "24" "" #f)
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Add"))
@@ -389,6 +433,7 @@
   (set-curr-ep item curr)
   (set-total-eps item total)
   (set-video-player item video-player)
+  (set-cover item selected-image-path)
   (build-view-screen window id))
 
 (define (build-edit-screen window id)
@@ -411,7 +456,8 @@
   (add-edit-buttons form (get-name item) (get-path item)
                     (number->string (get-curr-ep item))
                     (number->string (get-total-eps item))
-                    (or (get-video-player item) ""))
+                    (or (get-video-player item) "")
+                    (get-cover item))
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Save"))
@@ -457,6 +503,8 @@
   (build-edit-screen window id))
 
 (define (build-view-screen window id)
+  ; TODO:
+  ; make title bigger, put edit and delete icons at it's side
   (clean window)
   (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
   (gtk_box_set_spacing box 10)
@@ -469,6 +517,17 @@
   (define item (get-item db id))
   (define label (gtk_label_new (get-name item)))
   (gtk_box_pack_start box label 1 1 5)
+
+  (define cover (get-cover item))
+  (if cover
+    (begin
+     (print "displaying cover")
+     (define pixbuf (gdk_pixbuf_new_from_file_at_size
+                      cover 200 200 #f))
+     (if pixbuf
+       (define image (gtk_image_new_from_pixbuf pixbuf))
+       (define image (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
+     (gtk_box_pack_start box image 1 1 5)))
 
   (define progress-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
 
