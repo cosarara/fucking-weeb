@@ -570,18 +570,26 @@
   (define (search-filter item)
     (irregex-search regex (get-name item)))
 
-  (define items (filter search-filter (get-item-list db)))
-
+  ; add ids
   (define i 0)
+  (define items
+    (map (lambda (item)
+           (begin
+             (define new-item (alist-cons 'id i item))
+             (set! i (+ 1 i))
+             new-item))
+         (get-item-list db)))
+
+  (define items (filter search-filter items))
+
   (for-each
     (lambda (item)
       (define vbutton (gtk_button_new_with_label (get-name item)))
-      (define data i)
+      (define data (cdr (assoc 'id item)))
       (g_signal_connect vbutton "clicked" #$go_view
                         (address->pointer data))
       ;(gtk_container_add button-box vbutton)
-      (gtk_box_pack_start button-box vbutton 0 1 5)
-      (set! i (+ i 1)))
+      (gtk_box_pack_start button-box vbutton 0 1 5))
     items)
   (define hbutton (gtk_button_new_with_label "+"))
   (g_signal_connect hbutton "clicked" #$go_add #f)
