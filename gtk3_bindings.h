@@ -297,6 +297,32 @@ typedef enum
   GTK_RESPONSE_HELP         = -11
 } GtkResponseType;
 
+typedef enum
+{
+  GTK_FILE_CHOOSER_ACTION_OPEN,
+  GTK_FILE_CHOOSER_ACTION_SAVE,
+  GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+  GTK_FILE_CHOOSER_ACTION_CREATE_FOLDER
+} GtkFileChooserAction;
+
+GtkWidget *
+gtk_file_chooser_button_new (const gchar *title,
+                             GtkFileChooserAction action);
+
+gchar *
+gtk_file_chooser_get_filename (GtkFileChooser *chooser);
+
+gboolean
+gtk_file_chooser_set_filename (GtkFileChooser *chooser,
+                               const char *filename);
+
+gchar *
+gtk_file_chooser_get_uri (GtkFileChooser *chooser);
+
+gboolean
+gtk_file_chooser_set_uri (GtkFileChooser *chooser,
+                          const char *uri);
+
 // pango
 
 void

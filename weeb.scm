@@ -6,11 +6,11 @@
 
 (define app-title "Fucking weeb")
 
-(define video-player "mpv")
-
 ; default when no db
 (define db '((version 0)
-             (defaults ("mpv" "/home/jaume/videos/series/"))
+             (defaults
+               (video-player . "mpv")
+               (path . "/home/jaume/videos/series/"))
              (items
                ((curr . 120)
                 (total . 160)
@@ -21,17 +21,55 @@
                 (name . "eva")
                 (path . "/home/jaume/videos/series/0-Sorted/neon_genesis_evangelion-1080p-renewal_cat")))))
 
+;
+; black magic
+(define (get-db-node path db)
+  (define node-p (cons db #f)) ; this is a box
+  (define val
+    (call/cc ; should we just catch the exception at trying to cdr #f?
+      (lambda (return)
+        (for-each
+          (lambda (name)
+            (define a (assoc name (car node-p)))
+            (if a
+              (set-car! node-p (cdr a))
+              (return #f)))
+          path)
+        (car node-p))))
+  (or val
+      (begin
+        ; TODO: handle error
+        (print "bad bad")
+        (print path)
+        (print db))))
+
+(define (get-default-video-player db)
+  (get-db-node '(defaults video-player) db))
+
+(define (set-default-video-player db player)
+  (set-cdr! (assoc 'video-player (cdr (assoc 'defaults db))) player))
+
+(define (get-default-path db)
+  (get-db-node '(defaults path) db))
+
+(define (set-default-path db path)
+  (set-cdr! (assoc 'path (cdr (assoc 'defaults db))) path))
+
 (define (get-item-list db)
   (cdr (assoc 'items db)))
 
 (define (get-item db id)
   (list-ref (cdr (assoc 'items db)) id))
 
-(define (add-item db curr total name dir)
-  (set! db (append! (assoc 'items db) (list (list curr total name dir)))))
+(define (add-item db curr total name path)
+  (set! db (append! (assoc 'items db)
+                    `(((curr . ,curr)
+                       (total . ,total)
+                       (name . ,name)
+                       (path . ,path))))))
 
 (define (remove-item db n)
-  (define items (get-items db))
+  (define items (get-item-list db))
   (if (= n 0)
     (set! items (cdr items))
     (set-cdr! (list-tail items (- n 1)) (cdr (list-tail items n))))
@@ -181,8 +219,14 @@
 
 (define name-entry #f)
 (define path-entry #f)
+(define selected-path #f)
+
+(define (get-selected-path)
+  (or selected-path
+      (get-default-path db)))
 (define curr-entry #f)
 (define total-entry #f)
+(define video-player-entry #f)
 
 (define-external
   (add_button
@@ -190,12 +234,19 @@
     (c-pointer data))
   void
   (define name (gtk_entry_get_text name-entry))
-  (define path (gtk_entry_get_text path-entry))
   (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
   (define total (or (string->number (gtk_entry_get_text total-entry))
                     (max curr 24)))
-  (add-item db curr total name path)
+  (add-item db curr total name (get-selected-path))
   (build-main-screen window))
+
+(define-external
+  (path_picked
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (set! selected-path
+    (gtk_file_chooser_get_filename widget)))
 
 (define (add-edit-buttons form name path curr total)
   (define name-label (gtk_label_new "Name:"))
@@ -208,11 +259,19 @@
 
   (define path-label (gtk_label_new "Path:"))
   (gtk_label_set_xalign path-label 1)
-  (set! path-entry (gtk_entry_new)) ; todo dir-picker
-  (gtk_entry_set_text path-entry path)
-  (gtk_widget_set_hexpand path-entry 1)
+
+  (define path-picker
+    (gtk_file_chooser_button_new "Select the search path"
+                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER))
+  (set! selected-path #f)
+  (g_signal_connect path-picker "file-set" #$path_picked #f)
+  (if path
+    (gtk_file_chooser_set_filename path-picker path))
+
+  (gtk_widget_set_hexpand path-picker 1)
+
   (gtk_grid_attach form path-label 0 1 1 1)
-  (gtk_grid_attach form path-entry 1 1 3 1)
+  (gtk_grid_attach form path-picker 1 1 3 1)
 
   (define eps-label (gtk_label_new "Current episode:"))
   (gtk_label_set_xalign eps-label 1)
@@ -244,7 +303,7 @@
   (gtk_grid_set_row_spacing form 10)
   (gtk_box_pack_start box form 1 1 5)
 
-  (add-edit-buttons form "" "" "1" "24")
+  (add-edit-buttons form "" (get-default-path db) "1" "24")
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Add"))
@@ -266,12 +325,11 @@
   void
   (define id (data->id data))
   (define name (gtk_entry_get_text name-entry))
-  (define path (gtk_entry_get_text path-entry))
   (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
   (define total (or (string->number (gtk_entry_get_text total-entry)) (max curr 24)))
   (define item (get-item db id))
   (set-name item name)
-  (set-dir item path)
+  (set-dir item (get-selected-path))
   (set-curr-ep item curr)
   (set-total-eps item total)
   (build-view-screen window id))
@@ -390,11 +448,71 @@
   (gtk_widget_show_all window))
 
 (define-external
+  (save_settings_button
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define video-player (gtk_entry_get_text video-player-entry))
+  (set-default-video-player db video-player)
+  (set-default-path db (get-selected-path))
+  (build-main-screen window))
+
+(define (build-settings-screen window)
+  (clean window)
+  (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (gtk_box_set_spacing box 20)
+  (gtk_widget_set_margin_top box 20)
+  (gtk_widget_set_margin_start box 20)
+  (gtk_widget_set_margin_end box 20)
+  (gtk_widget_set_margin_bottom box 20)
+  (gtk_container_add window box)
+
+  (define form (gtk_grid_new))
+  (gtk_grid_set_column_spacing form 20)
+  (gtk_grid_set_row_spacing form 10)
+  (gtk_box_pack_start box form 1 1 5)
+
+  (define video-player (get-default-video-player db))
+  (define video-player-label (gtk_label_new "Video Player:"))
+  (gtk_label_set_xalign video-player-label 1)
+  (set! video-player-entry (gtk_entry_new))
+  (gtk_entry_set_text video-player-entry video-player)
+  (gtk_widget_set_hexpand video-player-entry 1)
+  (gtk_grid_attach form video-player-label 0 0 1 1)
+  (gtk_grid_attach form video-player-entry 1 0 3 1)
+
+  (define path (get-default-path db))
+  (define path-label (gtk_label_new "Default Path:"))
+  (gtk_label_set_xalign path-label 1)
+  (define path-picker
+    (gtk_file_chooser_button_new "Select the default path"
+                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER))
+  (g_signal_connect path-picker "file-set" #$path_picked #f)
+  (if path
+    (gtk_file_chooser_set_filename path-picker path))
+  (gtk_widget_set_hexpand path-picker 1)
+  (gtk_grid_attach form path-label 0 1 1 1)
+  (gtk_grid_attach form path-picker 1 1 3 1)
+
+  (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (define add-button (gtk_button_new_with_label "Save"))
+  (define back-button (gtk_button_new_with_label "Cancel"))
+  (gtk_box_pack_start button-box add-button 1 1 5)
+  (gtk_box_pack_end button-box back-button 1 1 5)
+
+  (gtk_box_pack_end box button-box 0 0 5)
+
+  (g_signal_connect add-button "clicked" #$save_settings_button #f)
+  (g_signal_connect back-button "clicked" #$go_back #f)
+
+  (gtk_widget_show_all window))
+
+(define-external
   (go_settings
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  #f)
+  (build-settings-screen window))
 
 (define (build-main-screen window)
   (clean window)
@@ -430,6 +548,9 @@
   (define i 0)
   (for-each
     (lambda (item)
+      (print "kabum")
+      (print item)
+      (print db)
       (define vbutton (gtk_button_new_with_label (get-name item)))
       (define data i)
       (g_signal_connect vbutton "clicked" #$go_view
