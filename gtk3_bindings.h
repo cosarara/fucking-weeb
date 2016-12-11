@@ -323,6 +323,14 @@ gboolean
 gtk_file_chooser_set_uri (GtkFileChooser *chooser,
                           const char *uri);
 
+GtkWidget *
+gtk_scrolled_window_new (GtkAdjustment *hadjustment,
+                         GtkAdjustment *vadjustment);
+
+GtkWidget *
+gtk_viewport_new (GtkAdjustment *hadjustment,
+                  GtkAdjustment *vadjustment);
+
 // pango
 
 void

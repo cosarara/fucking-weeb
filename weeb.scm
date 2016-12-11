@@ -99,6 +99,17 @@
 (define (set-path item n)
   (set-cdr! (assoc 'path item) n))
 
+(define (get-video-player item)
+  (define p (assoc 'video-player item))
+  (and p (cdr p)))
+
+(define (set-video-player item v)
+  (if (equal? v "")
+    (set! item (alist-delete! 'video-player item))
+    (if (get-video-player item)
+      (set-cdr! (assoc 'video-player item) v)
+      (set! item (append! item (list (cons 'video-player v)))))))
+
 (define (save-db)
   (call-with-output-file "db"
    (lambda (port)
@@ -175,16 +186,23 @@
           (filter (lambda (s) (irregex-search r3 s)) file-list)
           f))
       (if (null? f)
-        (print "error: file not found")
+        (begin
+          (print "error: file not found")
+          #f)
         (begin
           (set! f (format #f "~A~A" dir (car f)))
-          (process-run video-player (list f)))))))
+          f)))))
+          ;(process-run video-player (list f)))))))
 
 (define (watch id)
   (define item (get-item db id))
   (define dir (get-path item))
-  (find-ep dir (get-curr-ep item))
-  (printf "watch ~A ~A~%" (get-name item) (get-curr-ep item)))
+  (define fn (find-ep dir (get-curr-ep item)))
+  (printf "watch ~A ~A ~A~%" (get-name item) (get-curr-ep item) fn)
+  (define video-player (or (get-video-player item)
+                           (get-default-video-player db)))
+  (if f
+   (process-run video-player (list f))))
 
 (define-external
   (watch_button
@@ -220,9 +238,6 @@
 (define name-entry #f)
 (define selected-path #f)
 
-(define (get-selected-path)
-  (or selected-path
-      (get-default-path db)))
 (define curr-entry #f)
 (define total-entry #f)
 (define video-player-entry #f)
@@ -236,7 +251,9 @@
   (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
   (define total (or (string->number (gtk_entry_get_text total-entry))
                     (max curr 24)))
-  (add-item db curr total name (get-selected-path))
+  (add-item db curr total name
+    (or selected-path
+        (get-default-path db)))
   (build-main-screen window))
 
 (define-external
@@ -253,7 +270,7 @@
         (gtk_entry_set_text name-entry (last parts))))))
   ; TODO: automagically set number of episodes
 
-(define (add-edit-buttons form name path curr total)
+(define (add-edit-buttons form name path curr total video-player)
   (define name-label (gtk_label_new "Name:"))
   (gtk_label_set_xalign name-label 1)
   (set! name-entry (gtk_entry_new))
@@ -290,7 +307,15 @@
   (gtk_grid_attach form eps-label 0 2 1 1)
   (gtk_grid_attach form curr-entry 1 2 1 1)
   (gtk_grid_attach form eps-slash 2 2 1 1)
-  (gtk_grid_attach form total-entry 3 2 1 1))
+  (gtk_grid_attach form total-entry 3 2 1 1)
+
+  (define video-player-label (gtk_label_new "Video Player:"))
+  (gtk_label_set_xalign video-player-label 1)
+  (set! video-player-entry (gtk_entry_new))
+  (gtk_entry_set_text video-player-entry video-player)
+  (gtk_widget_set_hexpand video-player-entry 1)
+  (gtk_grid_attach form video-player-label 0 3 1 1)
+  (gtk_grid_attach form video-player-entry 1 3 3 1))
 
 
 (define (build-add-screen window)
@@ -308,7 +333,7 @@
   (gtk_grid_set_row_spacing form 10)
   (gtk_box_pack_start box form 1 1 5)
 
-  (add-edit-buttons form "" (get-default-path db) "1" "24")
+  (add-edit-buttons form "" (get-default-path db) "1" "24" "")
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Add"))
@@ -332,11 +357,14 @@
   (define name (gtk_entry_get_text name-entry))
   (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
   (define total (or (string->number (gtk_entry_get_text total-entry)) (max curr 24)))
+  (define video-player (gtk_entry_get_text video-player-entry))
   (define item (get-item db id))
   (set-name item name)
-  (set-path item (get-selected-path))
+  (if selected-path
+    (set-path item selected-path))
   (set-curr-ep item curr)
   (set-total-eps item total)
+  (set-video-player item video-player)
   (build-view-screen window id))
 
 (define (build-edit-screen window id)
@@ -358,7 +386,8 @@
 
   (add-edit-buttons form (get-name item) (get-path item)
                     (number->string (get-curr-ep item))
-                    (number->string (get-total-eps item)))
+                    (number->string (get-total-eps item))
+                    (or (get-video-player item) ""))
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Save"))
@@ -459,7 +488,8 @@
   void
   (define video-player (gtk_entry_get_text video-player-entry))
   (set-default-video-player db video-player)
-  (set-default-path db (get-selected-path))
+  (if selected-path
+    (set-default-path db selected-path))
   (build-main-screen window))
 
 (define (build-settings-screen window)
@@ -521,7 +551,16 @@
 
 (define (build-main-screen window)
   (clean window)
+
+  (define scrollable (gtk_scrolled_window_new #f #f))
+  (define viewport (gtk_viewport_new #f #f))
+
+  (gtk_container_add scrollable viewport)
+  (gtk_container_add window scrollable)
+
   (define button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+
+  (gtk_container_add viewport button-box)
 
   (gtk_box_set_spacing button-box 20)
   (gtk_widget_set_margin_top button-box 20)
@@ -578,7 +617,7 @@
   (set! window (gtk_application_window_new app))
   (gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
   (gtk_window_set_title window app-title)
-  (gtk_window_set_default_size window 200 200)
+  (gtk_window_set_default_size window 300 500)
   (build-main-screen window))
 
 (g_signal_connect app "activate" #$activate #f)
