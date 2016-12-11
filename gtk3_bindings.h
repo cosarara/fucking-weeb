@@ -402,6 +402,76 @@ GtkWidget *
 gtk_image_new_from_icon_name (const gchar *icon_name,
                               GtkIconSize size);
 
+GtkWidget *
+gtk_event_box_new (void);
+
+typedef enum
+{
+  GDK_EXPOSURE_MASK             = 2,
+  GDK_POINTER_MOTION_MASK       = 4,
+  GDK_POINTER_MOTION_HINT_MASK  = 8,
+  GDK_BUTTON_MOTION_MASK        = 16,
+  GDK_BUTTON1_MOTION_MASK       = 32,
+  GDK_BUTTON2_MOTION_MASK       = 64,
+  GDK_BUTTON3_MOTION_MASK       = 128,
+  GDK_BUTTON_PRESS_MASK         = 256,
+  GDK_BUTTON_RELEASE_MASK       = 512,
+  GDK_KEY_PRESS_MASK            = 1024,
+  GDK_KEY_RELEASE_MASK          = 2048,
+  GDK_ENTER_NOTIFY_MASK         = 4096,
+  GDK_LEAVE_NOTIFY_MASK         = 8192,
+  GDK_FOCUS_CHANGE_MASK         = 16384,
+  GDK_STRUCTURE_MASK            = 32768,
+  GDK_PROPERTY_CHANGE_MASK      = 65536,
+  GDK_VISIBILITY_NOTIFY_MASK    = 131072,
+  GDK_PROXIMITY_IN_MASK         = 262144,
+  GDK_PROXIMITY_OUT_MASK        = 524288,
+  GDK_SUBSTRUCTURE_MASK         = 1048576,
+  GDK_SCROLL_MASK               = 2097152,
+  GDK_TOUCH_MASK                = 4194304,
+  GDK_SMOOTH_SCROLL_MASK        = 8388608,
+  GDK_TOUCHPAD_GESTURE_MASK     = 16777216,
+  GDK_TABLET_PAD_MASK           = 33554432,
+  GDK_ALL_EVENTS_MASK           = 0xFFFFFE
+} GdkEventMask;
+
+void
+gtk_widget_set_events (GtkWidget *widget,
+                       gint events);
+
+GtkWidget *
+gtk_flow_box_new (void);
+
+typedef enum
+{
+  GTK_SELECTION_NONE,
+  GTK_SELECTION_SINGLE,
+  GTK_SELECTION_BROWSE,
+  GTK_SELECTION_MULTIPLE
+} GtkSelectionMode;
+
+void
+gtk_flow_box_set_selection_mode (GtkFlowBox *box,
+                                 GtkSelectionMode mode);
+
+void
+gtk_flow_box_insert (GtkFlowBox *box,
+                     GtkWidget *widget,
+                     gint position);
+
+void
+gtk_widget_set_size_request (GtkWidget *widget,
+                             gint width,
+                             gint height);
+
+void
+gtk_label_set_line_wrap (GtkLabel *label,
+                         gboolean wrap);
+
+void
+gtk_label_set_max_width_chars (GtkLabel *label,
+                               gint n_chars);
+
 // pango
 
 void

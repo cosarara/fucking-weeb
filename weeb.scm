@@ -171,7 +171,7 @@
   (define child (gtk_bin_get_child window))
   (if child (gtk_widget_destroy child) #f))
 
-(define (clean-box box)
+(define (clean-container box)
   (define children (gtk_container_get_children box))
   (do ((iter children (_GList-next iter)))
       ((not iter) #f)
@@ -193,6 +193,15 @@
 (define-external
   (go_view
     ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define id (data->id data))
+  (build-view-screen window id))
+
+(define-external
+  (cover_button_press
+    ((pointer "GtkWidget") widget)
+    ((pointer "GdkEvent") widget)
     (c-pointer data))
   void
   (define id (data->id data))
@@ -638,7 +647,7 @@
   (if cover
     (begin
      (define pixbuf (gdk_pixbuf_new_from_file_at_size
-                      cover 200 200 #f))
+                      cover 300 300 #f))
      (if pixbuf
        (define image (gtk_image_new_from_pixbuf pixbuf))
        (define image (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
@@ -754,7 +763,7 @@
 (define button-box #f)
 
 (define (build-button-box)
-  (clean-box button-box)
+  (clean-container button-box)
 
   (define regex (irregex (gtk_entry_get_text search-bar) 'i))
   (define (search-filter item)
@@ -786,12 +795,31 @@
 
   (for-each
     (lambda (item)
-      (define vbutton (gtk_button_new_with_label (get-name item)))
+      (define cover-event-box (gtk_event_box_new))
+      (gtk_widget_set_events cover-event-box GDK_BUTTON_PRESS_MASK)
+      (define cover-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+      (gtk_container_add cover-event-box cover-box)
+      (gtk_widget_set_size_request cover-box 100 200)
+      (define cover (get-cover item))
+      (define pixbuf
+        (if cover
+          (gdk_pixbuf_new_from_file_at_size cover 200 200 #f)
+          #f))
+      (define image
+        (if pixbuf
+          (gtk_image_new_from_pixbuf pixbuf)
+          (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
+      (gtk_box_pack_start cover-box image 1 1 5)
+      ;(define vbutton (gtk_button_new_with_label (get-name item)))
+      (define title-label (gtk_label_new (get-name item)))
+      (gtk_label_set_line_wrap title-label 1)
+      (gtk_label_set_max_width_chars title-label 18)
+      (gtk_box_pack_start cover-box title-label 0 1 5)
       (define data (cdr (assoc 'id item)))
-      (g_signal_connect vbutton "clicked" #$go_view
+      (g_signal_connect cover-event-box "button-press-event"
+                        #$cover_button_press
                         (address->pointer data))
-      ;(gtk_container_add button-box vbutton)
-      (gtk_box_pack_start button-box vbutton 0 1 5))
+      (gtk_flow_box_insert button-box cover-event-box -1))
     items))
 
 (define (build-main-screen window)
@@ -833,10 +861,12 @@
 
   (gtk_box_pack_start main-box scrollable 1 1 0)
 
-  (set! button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (set! button-box (gtk_flow_box_new))
+  (gtk_flow_box_set_selection_mode button-box GTK_SELECTION_NONE)
+  ;(set! button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
   (gtk_container_add viewport button-box)
 
-  (gtk_box_set_spacing button-box 20)
+  ;(gtk_box_set_spacing button-box 20)
 
   (build-button-box)
 
