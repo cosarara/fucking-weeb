@@ -57,7 +57,7 @@ Then install (using chicken-install):
 * medea
 
 Also you probably want to first do [this][chicken-install],
-but using chicken/8 instead of 6.
+but using chicken/8 instead of 6 and in ~/.local instead of ~/myeggs.
 
 Then build the thing:
 
