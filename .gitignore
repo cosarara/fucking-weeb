@@ -2,3 +2,4 @@ db
 *.o
 weeb
 weeb.c
+README.html
