@@ -48,13 +48,16 @@ So how do we build this?
 
 First install chicken scheme and gtk3.
 
-Then install (using [chicken-install]):
+Then install (using chicken-install):
 
 * bind
 * http-client
 * uri-common
 * openssl
 * medea
+
+Also you probably want to first do [this][chicken-install],
+but using chicken/8 instead of 6.
 
 Then build the thing:
 
