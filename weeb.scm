@@ -619,9 +619,14 @@
 (foreign-declare
   "static GtkTargetEntry my_target_table[] = {{ \"text/plain\", 0, 0 }};")
 
-; TODO: figure out how to not use ##sys#peek-c-string
 (define (get-g-string* ptr)
-  (define managed-string (##sys#peek-c-string ptr '0))
+  ; we pass the pointer through here to get a chicken string
+  ; just like calling ##sys#peek-c-string, but without undocumented stuff
+  (define g-string-passtrough
+    (foreign-lambda* c-string ((c-pointer p))
+      "C_return(p);"))
+  (define managed-string (g-string-passtrough ptr))
+  ;(define managed-string (##sys#peek-c-string ptr '0))
   (g_free ptr)
   managed-string)
 
