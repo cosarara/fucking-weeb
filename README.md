@@ -48,7 +48,7 @@ So how do we build this?
 
 First install chicken scheme and gtk3.
 
-Then install (using [chicken-install](#on-eggs)):
+Then install (using [chicken-install]):
 
 * bind
 * http-client
@@ -77,4 +77,4 @@ file and create one for you.
 [the video]: http://www.cosarara.me/jaume/files/videos/fucking-weeb.webm
 [TMDb]: https://www.themoviedb.org/
 [CHICKEN scheme]: https://call-cc.org/
-[on-eggs]: https://wiki.call-cc.org/man/4/Extensions#changing-repository-location
+[chicken-install]: https://wiki.call-cc.org/man/4/Extensions#changing-repository-location
