@@ -439,6 +439,36 @@ void
 gtk_widget_set_events (GtkWidget *widget,
                        gint events);
 
+typedef enum
+{
+  GDK_ACTION_DEFAULT = 1,
+  GDK_ACTION_COPY    = 2,
+  GDK_ACTION_MOVE    = 4,
+  GDK_ACTION_LINK    = 8,
+  GDK_ACTION_PRIVATE = 16,
+  GDK_ACTION_ASK     = 32
+} GdkDragAction;
+
+typedef enum {
+  GTK_DEST_DEFAULT_MOTION     = 1,
+  GTK_DEST_DEFAULT_HIGHLIGHT  = 2,
+  GTK_DEST_DEFAULT_DROP       = 4,
+  GTK_DEST_DEFAULT_ALL        = 0x07
+} GtkDestDefaults;
+
+typedef struct _GtkTargetEntry {
+  gchar *target;
+  guint  flags;
+  guint  info;
+} GtkTargetEntry;
+
+void
+gtk_drag_dest_set (GtkWidget *widget,
+                   GtkDestDefaults flags,
+                   const GtkTargetEntry *targets,
+                   gint n_targets,
+                   GdkDragAction actions);
+
 GtkWidget *
 gtk_flow_box_new (void);
 
@@ -453,6 +483,9 @@ typedef enum
 void
 gtk_flow_box_set_selection_mode (GtkFlowBox *box,
                                  GtkSelectionMode mode);
+
+guchar *
+gtk_selection_data_get_text (const GtkSelectionData *selection_data);
 
 void
 gtk_flow_box_insert (GtkFlowBox *box,
