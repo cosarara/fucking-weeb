@@ -82,6 +82,7 @@ file and create one for you.
 * I've had it crash in the middle of downloads (something something C_temporary_stack_bottom)
 * The code is not pretty. Don't judge me as a programmer for it
   (it was my first scheme project after all)
+* Can't delete the last item
 
 
 [the video]: http://www.cosarara.me/jaume/files/videos/fucking-weeb.webm
