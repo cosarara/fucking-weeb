@@ -381,6 +381,7 @@ typedef struct _GList
   GList *prev;
 } GList;
 
+void g_free (gpointer mem);
 void g_list_free (GList *list);
 
 GList *
