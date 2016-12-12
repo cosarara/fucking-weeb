@@ -580,6 +580,24 @@ void
 gtk_label_set_max_width_chars (GtkLabel *label,
                                gint n_chars);
 
+GtkStyleContext *
+gtk_widget_get_style_context (GtkWidget *widget);
+
+#define GTK_STYLE_PROVIDER_PRIORITY_APPLICATION 600
+
+void
+gtk_style_context_add_provider (GtkStyleContext *context,
+                                GtkStyleProvider *provider,
+                                guint priority);
+
+GtkCssProvider *
+gtk_css_provider_new (void);
+
+gboolean
+gtk_css_provider_load_from_path (GtkCssProvider *css_provider,
+                                 const gchar *path,
+                                 GError **error);
+
 // pango
 
 void

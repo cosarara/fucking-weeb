@@ -250,11 +250,16 @@
   (define item (get-item db id))
   (define dir (get-path item))
   (define fn (find-ep dir (get-curr-ep item)))
-  (printf "watch ~A ~A ~A~%" (get-name item) (get-curr-ep item) fn)
-  (define video-player (or (get-video-player item)
-                           (get-default-video-player db)))
-  (if f
-   (process-run video-player (list f))))
+  (if fn
+    (begin
+      (printf "watch ~A ~A ~A~%"
+              (get-name item) (get-curr-ep item) fn)
+      (define video-player (or (get-video-player item)
+                              (get-default-video-player db)))
+      (define cmd-string
+        (append (string-split video-player) (list fn)))
+      (process-run (car cmd-string) (cdr cmd-string)))
+    (gtk-warn "Couldn't find your file")))
 
 (define-external
   (watch_button
@@ -312,10 +317,15 @@
         (get-default-path db))
     video-player
     cover)
-  (build-main-screen window))
+  ;(build-main-screen window)
+  (build-view-screen window (- (length (get-item-list db)) 1)))
 
 (define (prettify name)
-  (string-titlecase (irregex-replace/all "_|-" name " ")))
+  (string-titlecase
+    (let ((name (irregex-replace/all "\\[.*\\]" name "")))
+      (set! name
+        (irregex-replace/all "_|-|\\.|[[:space:]]" name " "))
+      (irregex-replace/all " +" name " "))))
 
 (define-external
   (path_picked
@@ -448,7 +458,9 @@
     (gtk_file_chooser_button_new "Select the cover image"
                                  GTK_FILE_CHOOSER_ACTION_OPEN))
   (if cover
-    (gtk_file_chooser_set_filename image-path-picker cover))
+    (begin
+      (gtk_file_chooser_set_filename image-path-picker cover)
+      (set! selected-image-path cover)))
   (set! selected-path #f)
   (g_signal_connect image-path-picker "file-set" #$image_picked #f)
   (define image-filter (gtk_file_filter_new))
@@ -799,7 +811,7 @@
   (set! curr-spin (gtk_spin_button_new curr-adj 0 0))
   (gtk_box_pack_start progress-box curr-spin 0 1 5)
   (g_signal_connect
-    curr-spin "value-changed" #$ep_num_changed #f)
+    curr-spin "value-changed" #$ep_num_changed (address->pointer id))
 
   (define total-label (gtk_label_new (format #f "/ ~A"
                                              (get-total-eps item))))
@@ -1012,6 +1024,14 @@
   (define search-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (gtk_box_pack_start main-box search-box 0 1 5)
   (set! search-bar (gtk_search_entry_new))
+
+  (define search-bar-sc (gtk_widget_get_style_context search-bar))
+  (define s-css-provider (gtk_css_provider_new))
+  (gtk_css_provider_load_from_path s-css-provider "search.css" #f)
+  (gtk_style_context_add_provider
+    search-bar-sc s-css-provider
+    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION)
+
   (gtk_box_pack_start search-box search-bar 1 1 5)
   (g_signal_connect search-bar "search-changed" #$search_changed #f)
 
