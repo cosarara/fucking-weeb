@@ -790,7 +790,8 @@
   (g_signal_connect
     curr-spin "value-changed" #$ep_num_changed #f)
 
-  (define total-label (gtk_label_new (format #f "/ ~A" (get-total-eps item))))
+  (define total-label (gtk_label_new (format #f "/ ~A"
+                                             (get-total-eps item))))
   (gtk_box_pack_start progress-box total-label 0 1 5)
 
   (gtk_box_pack_start box progress-box 1 0 5)
@@ -798,10 +799,12 @@
   (gtk_widget_set_halign progress-box GTK_ALIGN_CENTER)
 
   (define button (gtk_button_new_with_label "Watch"))
-  (g_signal_connect button "clicked" #$watch_button (address->pointer id))
+  (g_signal_connect button "clicked" #$watch_button
+                    (address->pointer id))
   (gtk_box_pack_start box button 0 1 2)
   (define button (gtk_button_new_with_label "Watch Next"))
-  (g_signal_connect button "clicked" #$watch_next_button (address->pointer id))
+  (g_signal_connect button "clicked" #$watch_next_button
+                    (address->pointer id))
   (gtk_box_pack_start box button 0 1 2)
   (define bbutton (gtk_button_new_with_label "Back"))
   (gtk_widget_set_margin_top bbutton 20)
