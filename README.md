@@ -17,7 +17,7 @@ audio/subtitle settings than the default, change those.
 Wouldn't it be cool if I could save all this information
 in an easy to navigate library thingy? That's what this is.
 
-![screenshot](https://www.cosarara.me/jaume/images/fucking_weeb_screenshot.png)\
+![Screenshot](https://www.cosarara.me/jaume/images/fucking_weeb_screenshot.png)
 
 
 Now go watch [the video].
