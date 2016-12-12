@@ -790,6 +790,7 @@
 
   (define curr-adj (gtk_adjustment_new
                      (get-curr-ep item) 1 (get-total-eps item) 1 0 0))
+  ; FIXME: valgrind calls a memory leak around here
   (set! curr-spin (gtk_spin_button_new curr-adj 0 0))
   (gtk_box_pack_start progress-box curr-spin 0 1 5)
   (g_signal_connect
