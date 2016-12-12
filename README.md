@@ -29,7 +29,7 @@ Now go watch [the video].
 * Drag and drop posters from your browser and your file manager
 * Did I say it displays posters?
 * Set a video player command, which can be overriden
-per show
+  per show
 * It tries to get the show name from the directory name
 * It follows the XDG standards with regard to config files and such
 
@@ -59,6 +59,9 @@ Then install (using chicken-install):
 Also you probably want to first do [this][chicken-install],
 but using chicken/8 instead of 6 and in ~/.local instead of ~/myeggs.
 
+bind will try to install a binary in /usr/bin even with CHICKEN_REPOSITORY and all,
+so use "chicken-install -p ~/.local bind".
+
 Then build the thing:
 
 $ make
@@ -76,6 +79,9 @@ file and create one for you.
 
 * Make the thing faster
 * I've had it crash in the middle of downloads (something something C_temporary_stack_bottom)
+* The code is not pretty. Don't judge me as a programmer for it
+  (it was my first scheme project after all)
+
 
 [the video]: http://www.cosarara.me/jaume/files/videos/fucking-weeb.webm
 [TMDb]: https://www.themoviedb.org/
