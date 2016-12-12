@@ -1099,7 +1099,7 @@
 (condition-case (load-db)
   [(exn file i/o) (gtk-warn "Couldn't load the database file; using sample")])
 (g_signal_connect window "destroy" #$destroy #f)
-(gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
+;(gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
 (gtk_window_set_title window app-title)
 (gtk_window_set_default_size window 570 600)
 (build-main-screen window)
