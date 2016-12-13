@@ -85,9 +85,6 @@ file and create one for you.
 * Can't delete the last item
 * Shit's ugly when you have only one row of posters
 * Need a better poster-not-found image
-* Regexes need tweaks (neet's regexes are not perfect)
-    - 003 at the start of the filename doesn't match episode 3
-
 
 [the video]: http://www.cosarara.me/jaume/files/videos/fucking-weeb.webm
 [TMDb]: https://www.themoviedb.org/
