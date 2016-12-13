@@ -240,30 +240,30 @@
     (begin
       (define file-list (directory dir #t))
       ; These are stolen from onodera's neet source
-      (define r1
-        (irregex (format #f "(e|ep|episode|第)[0 ]*~A[^0-9]" num)))
-      (define r2
-        (irregex (format #f "( |_|-|#|\\.)[0 ]*~A[^0-9]" num)))
-      (define r3
-        (irregex (format #f "~A[^0-9]" num)))
-      (define f
-        (filter (lambda (s) (irregex-search r1 s)) file-list))
-      (define f
-        (if (null? f)
-          (filter (lambda (s) (irregex-search r2 s)) file-list)
-          f))
-      (define f
-        (if (null? f)
-          (filter (lambda (s) (irregex-search r3 s)) file-list)
-          f))
-      (if (null? f)
+      (define regexes
+        (map (lambda (r) (irregex (format #f r num)))
+          (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
+                "( |_|-|#|\\.)[0 ]*~A[^0-9]"
+                "(^|[^0-9])[0 ]*~A[^0-9]"
+                "~A[^0-9]")))
+
+      (define (find-file file-list regexes)
+         (if (null? regexes)
+           #f
+           (begin
+             (define matches
+               (filter (lambda (s) (irregex-search (car regexes) s))
+                       file-list))
+             (if (null? matches)
+               (find-file file-list (cdr regexes)))
+             (car matches))))
+      (define f (find-file file-list regexes))
+
+      (if f
+        (format #f "~A~A" dir f)
         (begin
           (print "error: file not found")
-          #f)
-        (begin
-          (set! f (format #f "~A~A" dir (car f)))
-          f)))))
-          ;(process-run video-player (list f)))))))
+          #f)))))
 
 (define (watch id)
   (define item (get-item db id))
