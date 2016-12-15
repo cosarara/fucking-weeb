@@ -38,17 +38,24 @@ Now go watch [the video].
 Oh yeah before you ask, I've only run this on linux.
 Have fun on other OSes.
 
-The easy way should be to download a release and just run that.
-But those aren't done yet, so let's go with the hard way for now.
+### Arch
+
+If you run arch, you are in luck, because so do I.
+[Have a PKGBUILD!](https://aur.archlinux.org/packages/weeb-git/)
+(not it's also in the arch/ directory in this same repo, so you can
+just get that).
+
+### Other *nix
 
 Fucking weeb is written in [CHICKEN scheme], and uses
 Gtk+ 3 as well as a bunch of dependencies (eggs).
 
-So how do we build this?
+The building dependencies are:
 
-First install chicken scheme and gtk3.
+* gtk3
+* chicken
 
-Then install (using chicken-install):
+Plus the following chicken eggs:
 
 * bind
 * http-client
@@ -56,24 +63,47 @@ Then install (using chicken-install):
 * openssl
 * medea
 
-Also you probably want to first do [this][chicken-install],
-but using chicken/8 instead of 6 and in ~/.local instead of ~/myeggs.
+#### Quick instructions
 
-bind will try to install a binary in /usr/bin even with CHICKEN_REPOSITORY and all,
-so use "chicken-install -p ~/.local bind".
+Install gtk3 and chicken from your distro's repositories, then run:
 
-Then build the thing:
+    $ mkdir -p "prefix/lib/chicken/8/"
+    $ unset CHICKEN_REPOSITORY
+    $ chicken-install -init "prefix/lib/chicken/8"
+    $ export CHICKEN_REPOSITORY="prefix/lib/chicken/8"
+    $ chicken-install -p "prefix" bind http-client uri-common openssl medea
+    $ make deployable
+    $ rm deploy_dir/weeb/*.setup-info
+    $ sudo make install
 
-$ make
-
-To run it:
-
-$ ./weeb
-
-You can then symlink or copy the binary to somewhere in your $PATH.
+You can then remove everything from the source directory.
+Fucking Weeb will be installed in /opt/weeb with a symlink in /usr/bin.
 
 The first time you run it, it will complain about having no database
-file and create one for you.
+file and create one for you (in your $XDG_HOME).
+
+#### Long instructions
+
+You can either bundle everything into one package
+(like we did in the quick instructions),
+so that the only dependency is gtk3, or make a normal development build, which
+will link to the files inside your CHICKEN_REPOSITORY.
+
+I keep my chicken eggs in _~/.local/lib/chicken/8_.
+Read [this][chicken-install] for the original instructions.
+
+_bind_ tries to install a binary in /usr/bin even with the CHICKEN_REPOSITORY
+env var, and that's why we use -p in the quick instructions.
+
+You could also install them as root in /usr/.
+
+Anyway, once you have the dependencies installed with chicken-install, and
+in either CHICKEN_REPOSITORY or the global path, you can run either
+_make_ or _make deployable_ and either will work.
+The former will give you a _weeb_ binary in the current directory which
+you can move around but links to your installed eggs, while the
+second will create a _weeb_ directory with a package you can
+move around to any system that has a compatible libc and gtk3 installed.
 
 ## TO-DOs/known bugs
 
