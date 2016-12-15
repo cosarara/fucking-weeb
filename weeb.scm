@@ -16,6 +16,25 @@
 ; You should have received a copy of the GNU General Public License
 ; along with Fucking Weeb.  If not, see <http://www.gnu.org/licenses/>.
 
+; The code is organised as follows:
+; 1 - DATABASE
+; 2 - FILESYSTEM & XDG
+; 3 - GTK
+; 3.1 - Main Screen
+; 3.1.1 - Poster List
+; 3.2 - Settings Screen
+; 3.3 - View Screen
+; 3.4 - Add New Screen
+; 3.5 - Edit Screen
+; 3.6 - Add/Edit controls
+; 3.7 - The Movie DB
+; 3.8 - Drag & Drop
+; 3.9 - Gtk Entry & exit points
+
+; Gtk callbacks are C functions and have to be declared
+; before functions that use them. Thus, every section will
+; have some callbacks (or not), then the actual function
+; implementing the feature (rendering a screen or whatever).
 
 (require-extension bind)
 (use lolevel)
@@ -28,6 +47,8 @@
 (use medea)
 
 (define app-title "Fucking weeb")
+
+; DATABASE
 
 ; default when no db
 (define db '((version 0)
@@ -145,6 +166,9 @@
   (set! item (alist-delete! 'cover item))
   (set! item (append! item (list (cons 'cover v)))))
 
+
+; FILESYSTEM & XDG
+
 (define (ensure-trailing-slash dir) (irregex-replace "/*$" dir "/"))
 
 (define xdg-app-name "fucking-weeb")
@@ -182,13 +206,12 @@
     (lambda (port)
       (set! db (read port)))))
 
+; GTK
+
+; todo get this at the bottom actually
 (foreign-declare "#include <gtk/gtk.h>")
 
 (bind-file "gtk3_bindings.h")
-
-(define (clean window)
-  (define child (gtk_bin_get_child window))
-  (if child (gtk_widget_destroy child) #f))
 
 (define (clean-container box)
   (define children (gtk_container_get_children box))
@@ -197,12 +220,221 @@
     (gtk_widget_destroy (_GList-data iter)))
   (g_list_free children))
 
+; GTK - Main Screen
+
 (define-external
-  (go_back
+  (go_settings
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  (build-main-screen window))
+  (build-settings-screen window))
+
+(define-external
+  (search_changed
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (build-button-box)
+  (gtk_widget_show_all window))
+
+(define-external
+  (go_add
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (build-add-screen window))
+
+(define (build-main-screen window)
+  (clean window)
+
+  (define main-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+
+  (gtk_container_add window main-box)
+
+  ;(gtk_container_add window scrollable)
+
+  (gtk_box_set_spacing main-box 20)
+  (gtk_widget_set_margin_top main-box 20)
+  (gtk_widget_set_margin_start main-box 20)
+  (gtk_widget_set_margin_end main-box 20)
+  (gtk_widget_set_margin_bottom main-box 20)
+
+  ; Title and settings
+  (define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (define title-label (make-title-label app-title))
+  (gtk_box_set_center_widget title-box title-label)
+  (define settings-button (gtk_button_new_from_icon_name
+                            "gtk-preferences"
+                            GTK_ICON_SIZE_BUTTON))
+  (g_signal_connect settings-button "clicked" #$go_settings #f)
+  (gtk_box_pack_end title-box settings-button 0 1 0)
+  (gtk_box_pack_start main-box title-box 0 1 5)
+
+  ; search bar
+  (define search-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (gtk_box_pack_start main-box search-box 0 1 5)
+  (set! search-bar (gtk_search_entry_new))
+
+  (define search-bar-sc (gtk_widget_get_style_context search-bar))
+  (define s-css-provider (gtk_css_provider_new))
+  (gtk_css_provider_load_from_path s-css-provider "search.css" #f)
+  (gtk_style_context_add_provider
+    search-bar-sc s-css-provider
+    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+  (gtk_box_pack_start search-box search-bar 1 1 5)
+  (g_signal_connect search-bar "search-changed" #$search_changed #f)
+
+  (define scrollable (gtk_scrolled_window_new #f #f))
+  (define viewport (gtk_viewport_new #f #f))
+  (gtk_container_add scrollable viewport)
+
+  (gtk_box_pack_start main-box scrollable 1 1 0)
+
+  (set! button-box (gtk_flow_box_new))
+  (gtk_flow_box_set_selection_mode button-box GTK_SELECTION_NONE)
+  ;(set! button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (gtk_container_add viewport button-box)
+
+  ;(gtk_box_set_spacing button-box 20)
+
+  (build-button-box)
+
+  (define add-button (gtk_button_new_from_icon_name
+                       "gtk-add"
+                       GTK_ICON_SIZE_BUTTON))
+  (g_signal_connect add-button "clicked" #$go_add #f)
+  (gtk_box_pack_end search-box add-button 0 1 0)
+
+  (gtk_widget_show_all window))
+
+; main window helper functions
+
+(define (clean window)
+  (define child (gtk_bin_get_child window))
+  (if child (gtk_widget_destroy child) #f))
+
+(define (make-title-label text)
+  (define title-label (gtk_label_new text))
+  ;(gtk_label_set_xalign title-label 0)
+  (define title-attrs (pango_attr_list_new))
+  (define attr-weight (pango_attr_weight_new PANGO_WEIGHT_BOLD))
+  (pango_attr_list_insert title-attrs attr-weight)
+  (define attr-scale (pango_attr_scale_new 1.5))
+  (pango_attr_list_insert title-attrs attr-scale)
+  (gtk_label_set_attributes title-label title-attrs)
+  ; should I actually free this myself? it segfaults! scary scary
+  ;(pango_attribute_destroy attr)
+  (pango_attr_list_unref title-attrs)
+  title-label)
+
+; Poster List
+
+(define-external
+  (cover_button_press
+    ((pointer "GtkWidget") widget)
+    ((pointer "GdkEvent") widget)
+    (c-pointer data))
+  void
+  (define id (data->id data))
+  (build-view-screen window id))
+
+(define-external
+  (receive_drop_main
+    ((pointer "GtkWidget") widget)
+    (c-pointer context)
+    (int x)
+    (int y)
+    (c-pointer data)
+    (unsigned-int info)
+    (unsigned-int time)
+    (c-pointer user-data))
+  void
+  ; fixme free the string
+  (define dropped-text
+    (string-trim-both
+      (my_gtk_selection_data_get_text data)))
+  (define id (data->id user-data))
+  (magic-drop-cover dropped-text id)
+  (update-cover-main-screen id))
+
+(define (build-button-box)
+  (clean-container button-box)
+
+  (define regex (irregex (gtk_entry_get_text search-bar) 'i))
+  (define (search-filter item)
+    (irregex-search regex (get-name item)))
+
+  ; download missing
+  ;(map (lambda (item)
+  ;       (if (not (get-cover item))
+  ;         (begin
+  ;           (format #t "Downloading cover for ~A~%" (get-name item))
+  ;           (define image-path (download-image (get-name item)))
+  ;           (print image-path)
+  ;           (if image-path (set-cover item image-path))))
+  ;     (get-item-list db)))
+
+  ; add ids
+  (define i 0)
+  (define items
+    (map (lambda (item)
+           (begin
+             (define new-item (alist-cons 'id i item))
+             (set! i (+ 1 i))
+             new-item))
+         (get-item-list db)))
+
+  (define items (sort (filter search-filter items)
+                  (lambda (a b) (string<? (get-name a)
+                                          (get-name b)))))
+
+  (set! cover-images '())
+
+  (for-each
+    (lambda (item)
+      (define item-id (cdr (assoc 'id item)))
+      (define cover-event-box (gtk_event_box_new))
+      (gtk_widget_set_events cover-event-box GDK_BUTTON_PRESS_MASK)
+      (define cover-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+      (set! cover-images (append! cover-images
+                                  `((,item-id . ,cover-box))))
+      (gtk_container_add cover-event-box cover-box)
+      (gtk_widget_set_size_request cover-box 100 200)
+      (define cover (get-cover item))
+      (define pixbuf
+        (if cover
+          (gdk_pixbuf_new_from_file_at_size cover 200 200 #f)
+          #f))
+      (define image
+        (if pixbuf
+          (gtk_image_new_from_pixbuf pixbuf)
+          (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
+
+      (if pixbuf (g_object_unref pixbuf))
+      (gtk_box_pack_start cover-box image 1 1 5)
+      ;(define vbutton (gtk_button_new_with_label (get-name item)))
+      (define title-label (gtk_label_new (get-name item)))
+      (gtk_label_set_line_wrap title-label 1)
+      (gtk_label_set_max_width_chars title-label 18)
+      (gtk_box_pack_start cover-box title-label 0 1 5)
+      (g_signal_connect cover-event-box "button-press-event"
+                        #$cover_button_press
+                        (address->pointer item-id))
+
+      (gtk_drag_dest_set
+         cover-event-box GTK_DEST_DEFAULT_ALL
+         (foreign-value "my_target_table" c-pointer)
+         1 GDK_ACTION_COPY)
+
+      (g_signal_connect
+         cover-event-box "drag-data-received"
+         #$receive_drop_main (address->pointer item-id))
+
+      (gtk_flow_box_insert button-box cover-event-box -1))
+    items))
+
+; Poster List helpers
 
 (define (data->id data)
  (if data
@@ -217,68 +449,125 @@
   (define id (data->id data))
   (build-view-screen window id))
 
+(define search-bar #f)
+
+(define button-box #f)
+
+(define cover-images '())
+
+; Settings Scren
+
 (define-external
-  (cover_button_press
+  (path_picked
     ((pointer "GtkWidget") widget)
-    ((pointer "GdkEvent") widget)
+    (c-pointer data))
+  void
+  (set! selected-path
+    (gtk_file_chooser_get_filename widget))
+  ; todo: copy string to scheme then free c string with g_free
+  (if (equal? "" (gtk_entry_get_text name-entry))
+    (begin
+      (define parts (irregex-split "/" selected-path))
+      (if (not (null? parts))
+        (gtk_entry_set_text name-entry (prettify (last parts)))))))
+  ; TODO: automagically set number of episodes
+
+(define-external
+  (save_settings_button
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define video-player (gtk_entry_get_text video-player-entry))
+  (set-default-video-player db video-player)
+  (if selected-path
+    (set-default-path db selected-path))
+  (build-main-screen window))
+
+(define-external
+  (go_back
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (build-main-screen window))
+
+(define (build-settings-screen window)
+  (clean window)
+  (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (gtk_box_set_spacing box 20)
+  (gtk_widget_set_margin_top box 20)
+  (gtk_widget_set_margin_start box 20)
+  (gtk_widget_set_margin_end box 20)
+  (gtk_widget_set_margin_bottom box 20)
+  (gtk_container_add window box)
+
+  (define form (gtk_grid_new))
+  (gtk_grid_set_column_spacing form 20)
+  (gtk_grid_set_row_spacing form 10)
+  (gtk_box_pack_start box form 1 1 5)
+
+  (define video-player (get-default-video-player db))
+  (define video-player-label (gtk_label_new "Video Player:"))
+  (gtk_label_set_xalign video-player-label 1)
+  (set! video-player-entry (gtk_entry_new))
+  (gtk_entry_set_text video-player-entry video-player)
+  (gtk_widget_set_hexpand video-player-entry 1)
+  (gtk_grid_attach form video-player-label 0 0 1 1)
+  (gtk_grid_attach form video-player-entry 1 0 3 1)
+
+  (define path (get-default-path db))
+  (define path-label (gtk_label_new "Default Path:"))
+  (gtk_label_set_xalign path-label 1)
+  (define path-picker
+    (gtk_file_chooser_button_new "Select the default path"
+                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER))
+  (g_signal_connect path-picker "file-set" #$path_picked #f)
+  (if path
+    (gtk_file_chooser_set_filename path-picker path))
+  (gtk_widget_set_hexpand path-picker 1)
+  (gtk_grid_attach form path-label 0 1 1 1)
+  (gtk_grid_attach form path-picker 1 1 3 1)
+
+  (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (define add-button (gtk_button_new_with_label "Save"))
+  (define back-button (gtk_button_new_with_label "Cancel"))
+  (gtk_box_pack_start button-box add-button 1 1 5)
+  (gtk_box_pack_end button-box back-button 1 1 5)
+
+  (gtk_box_pack_end box button-box 0 0 5)
+
+  (g_signal_connect add-button "clicked" #$save_settings_button #f)
+  (g_signal_connect back-button "clicked" #$go_back #f)
+
+  (gtk_widget_show_all window))
+
+; View Screen
+
+(define-external
+  (remove_button
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define confirm-dialog (gtk_message_dialog_new
+                           window
+                           0
+                           GTK_MESSAGE_QUESTION
+                           GTK_BUTTONS_OK_CANCEL
+                           "Are you sure you want to delete this?"))
+  (define response (gtk_dialog_run confirm-dialog))
+  (gtk_widget_destroy confirm-dialog)
+  (if (= response GTK_RESPONSE_OK)
+    (begin
+      (define id (data->id data))
+      (set! db (remove-item db id))
+      (build-main-screen window))))
+
+(define-external
+  (edit_button
+    ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
   (define id (data->id data))
-  (build-view-screen window id))
-
-(define-external
-  (go_add
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (build-add-screen window))
-
-(define (find-ep dir num)
-  (set! dir (ensure-trailing-slash dir))
-  (if (not (directory? dir))
-    (print "error: not a directory")
-    (begin
-      (define file-list (directory dir #t))
-      ; These are stolen from onodera's neet source
-      (define regexes
-        (map (lambda (r) (irregex (format #f r num)))
-          (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
-                "( |_|-|#|\\.)[0 ]*~A[^0-9]"
-                "(^|[^0-9])[0 ]*~A[^0-9]"
-                "~A[^0-9]")))
-
-      (define (find-file file-list regexes)
-         (if (null? regexes)
-           #f
-           (begin
-             (define matches
-               (filter (lambda (s) (irregex-search (car regexes) s))
-                       file-list))
-             (if (null? matches)
-               (find-file file-list (cdr regexes)))
-             (car matches))))
-      (define f (find-file file-list regexes))
-
-      (if f
-        (format #f "~A~A" dir f)
-        (begin
-          (print "error: file not found")
-          #f)))))
-
-(define (watch id)
-  (define item (get-item db id))
-  (define dir (get-path item))
-  (define fn (find-ep dir (get-curr-ep item)))
-  (if fn
-    (begin
-      (printf "watch ~A ~A ~A~%"
-              (get-name item) (get-curr-ep item) fn)
-      (define video-player (or (get-video-player item)
-                              (get-default-video-player db)))
-      (define cmd-string
-        (append (string-split video-player) (list fn)))
-      (process-run (car cmd-string) (cdr cmd-string)))
-    (gtk-warn "Couldn't find your file")))
+  (build-edit-screen window id))
 
 (define-external
   (watch_button
@@ -311,396 +600,6 @@
     (gtk_spin_button_get_value_as_int curr-spin))
   (set-curr-ep item new-val))
 
-(define name-entry #f)
-(define selected-path #f)
-(define selected-image-path #f)
-(define image-path-picker #f)
-
-(define curr-entry #f)
-(define total-entry #f)
-(define video-player-entry #f)
-
-(define-external
-  (add_button
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (define name (gtk_entry_get_text name-entry))
-  (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
-  (define total (or (string->number (gtk_entry_get_text total-entry))
-                    (max curr 24)))
-  (define video-player (gtk_entry_get_text video-player-entry))
-  (define cover selected-image-path)
-  (add-item db curr total name
-    (or selected-path
-        (get-default-path db))
-    video-player
-    cover)
-  ;(build-main-screen window)
-  (build-view-screen window (- (length (get-item-list db)) 1)))
-
-(define (prettify name)
-  (string-titlecase
-    (let ((name (irregex-replace/all "\\[.*\\]" name "")))
-      (set! name
-        (irregex-replace/all "_|-|\\.|[[:space:]]" name " "))
-      (irregex-replace/all " +" name " "))))
-
-(define-external
-  (path_picked
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (set! selected-path
-    (gtk_file_chooser_get_filename widget))
-  ; todo: copy string to scheme then free c string with g_free
-  (if (equal? "" (gtk_entry_get_text name-entry))
-    (begin
-      (define parts (irregex-split "/" selected-path))
-      (if (not (null? parts))
-        (gtk_entry_set_text name-entry (prettify (last parts)))))))
-  ; TODO: automagically set number of episodes
-
-(define-external
-  (image_picked
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (set! selected-image-path
-    (gtk_file_chooser_get_filename widget)))
-
-(define tmdb "https://api.themoviedb.org/3/")
-(define tmdb-key "api_key=fd7b3b3e7939e8eb7c8e26836b8ea410")
-(define base-url #f)
-
-(define (get-extension fn)
-  (define m (irregex-search "\\..*" (irregex-replace ".*/" fn "")))
-  (if m (irregex-match-substring m) ""))
-
-(define (clean-name name) ; for tmdb search
-  (string-trim-both (irregex-replace/all "\\(.*\\)|/" name "")))
-
-(define (download-image image-url file-name)
-  (print "downloading...")
-  (call-with-input-request
-    image-url #f
-    (lambda (rport)
-      (call-with-output-file
-        file-name
-        (lambda (wport)
-          (do ((byte (read-byte rport) (read-byte rport)))
-            ((eof-object? byte) #f)
-            (write-byte byte wport))))))
-  (print "downloaded!"))
-
-(define (auto-download-image dirty-name)
-  (define name (uri-encode-string (clean-name dirty-name)))
-  (define file-name (format #f "~A~A" xdg-data name)) ;missing ext
-  (print name)
-  (define url (format #f "~Asearch/multi?query=~A&~A"
-                      tmdb name tmdb-key))
-  (print url)
-  (define response
-    (condition-case
-      (read-json (with-input-from-request url #f read-string))
-      [(exn http) (begin
-                   (gtk-warn "HTTP error")
-                   '((results . #())))]))
-  ;(print response)
-  (define results (cdr (assoc 'results response)))
-  (if (= 0 (vector-length results))
-    #f ; todo error out
-    (begin
-      (define result (vector-ref results 0))
-      (define poster-path (cdr (assoc 'poster_path result)))
-      (if (not base-url)
-        (begin
-          (define url (format #f "~Aconfiguration?~A"
-                              tmdb tmdb-key))
-          (define config
-            (read-json
-              (with-input-from-request url #f read-string)))
-          (set! base-url
-            (cdr (assoc 'base_url (cdr (assoc 'images config)))))))
-      (define image-url (format #f "~Aoriginal~A"
-                                base-url poster-path))
-      (print image-url)
-      (set! file-name (format #f "~A~A" file-name
-                              (get-extension poster-path)))
-      (print file-name)
-      (download-image image-url file-name)
-      file-name)))
-
-(define-external
-  (image_download
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (define file-name
-    (auto-download-image (gtk_entry_get_text name-entry)))
-  (if file-name
-    (begin
-      (gtk_file_chooser_set_filename image-path-picker file-name)
-      (set! selected-image-path file-name))
-    (print "couldn't get image"))) ; todo handle this better
-
-(define (add-edit-buttons form name path curr total video-player cover)
-  (define name-label (gtk_label_new "Name:"))
-  (gtk_label_set_xalign name-label 1)
-  (set! name-entry (gtk_entry_new))
-  (gtk_entry_set_text name-entry name)
-  (gtk_widget_set_hexpand name-entry 1)
-  (gtk_grid_attach form name-label 0 0 1 1)
-  (gtk_grid_attach form name-entry 1 0 3 1)
-
-  (define path-label (gtk_label_new "Path:"))
-  (gtk_label_set_xalign path-label 1)
-
-  (define path-picker
-    (gtk_file_chooser_button_new "Select the search path"
-                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER))
-  (set! selected-path #f)
-  (g_signal_connect path-picker "file-set" #$path_picked #f)
-  (if path
-    (gtk_file_chooser_set_filename path-picker path))
-
-  (gtk_widget_set_hexpand path-picker 1)
-
-  (gtk_grid_attach form path-label 0 1 1 1)
-  (gtk_grid_attach form path-picker 1 1 3 1)
-
-  (define image-path-label (gtk_label_new "Cover Image Path:"))
-  (gtk_label_set_xalign image-path-label 1)
-  ;(set! image-path-entry (gtk_entry_new))
-  ;(gtk_entry_set_text image-path-entry "image path here")
-  (set! image-path-picker
-    (gtk_file_chooser_button_new "Select the cover image"
-                                 GTK_FILE_CHOOSER_ACTION_OPEN))
-  (if cover
-    (begin
-      (gtk_file_chooser_set_filename image-path-picker cover)
-      (set! selected-image-path cover)))
-  (set! selected-path #f)
-  (g_signal_connect image-path-picker "file-set" #$image_picked #f)
-  (define image-filter (gtk_file_filter_new))
-  (gtk_file_filter_add_mime_type image-filter "image/*")
-  (gtk_file_filter_set_name image-filter "Image File")
-  (gtk_file_chooser_add_filter image-path-picker image-filter)
-  (gtk_widget_set_hexpand image-path-picker 1)
-  (define fetch-image-button (gtk_button_new_with_label "Download"))
-  (g_signal_connect fetch-image-button "clicked" #$image_download #f)
-  (gtk_grid_attach form image-path-label 0 2 1 1)
-  (gtk_grid_attach form image-path-picker 1 2 2 1)
-  (gtk_grid_attach form fetch-image-button 3 2 1 1)
-
-  (define eps-label (gtk_label_new "Current Episode:"))
-  (gtk_label_set_xalign eps-label 1)
-  (set! curr-entry (gtk_entry_new))
-  (gtk_entry_set_text curr-entry curr)
-  (gtk_widget_set_hexpand curr-entry 1)
-  (define eps-slash (gtk_label_new "/"))
-  (set! total-entry (gtk_entry_new))
-  (gtk_entry_set_text total-entry total)
-  (gtk_widget_set_hexpand total-entry 1)
-  (gtk_grid_attach form eps-label 0 3 1 1)
-  (gtk_grid_attach form curr-entry 1 3 1 1)
-  (gtk_grid_attach form eps-slash 2 3 1 1)
-  (gtk_grid_attach form total-entry 3 3 1 1)
-
-  (define video-player-label (gtk_label_new "Video Player:"))
-  (gtk_label_set_xalign video-player-label 1)
-  (set! video-player-entry (gtk_entry_new))
-  (gtk_entry_set_text video-player-entry video-player)
-  (gtk_widget_set_hexpand video-player-entry 1)
-  (gtk_grid_attach form video-player-label 0 4 1 1)
-  (gtk_grid_attach form video-player-entry 1 4 3 1))
-
-
-(define (build-add-screen window)
-  (clean window)
-  (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
-  (gtk_box_set_spacing box 20)
-  (gtk_widget_set_margin_top box 20)
-  (gtk_widget_set_margin_start box 20)
-  (gtk_widget_set_margin_end box 20)
-  (gtk_widget_set_margin_bottom box 20)
-  (gtk_container_add window box)
-
-  (define form (gtk_grid_new))
-  (gtk_grid_set_column_spacing form 20)
-  (gtk_grid_set_row_spacing form 10)
-  (gtk_box_pack_start box form 1 1 5)
-
-  (add-edit-buttons form "" (get-default-path db) "1" "24" "" #f)
-
-  (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
-  (define add-button (gtk_button_new_with_label "Add"))
-  (define back-button (gtk_button_new_with_label "Cancel"))
-  (gtk_box_pack_start button-box add-button 1 1 5)
-  (gtk_box_pack_end button-box back-button 1 1 5)
-
-  (gtk_box_pack_end box button-box 0 0 5)
-
-  (g_signal_connect add-button "clicked" #$add_button #f)
-  (g_signal_connect back-button "clicked" #$go_back #f)
-
-  (gtk_widget_show_all window))
-
-(define-external
-  (save_edit_button
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (define id (data->id data))
-  (define name (gtk_entry_get_text name-entry))
-  (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
-  (define total (or (string->number (gtk_entry_get_text total-entry))
-                    (max curr 24)))
-  (define video-player (gtk_entry_get_text video-player-entry))
-  (define item (get-item db id))
-  (set-name item name)
-  (if selected-path
-    (set-path item selected-path))
-  (set-curr-ep item curr)
-  (set-total-eps item total)
-  (set-video-player item video-player)
-  (set-cover item selected-image-path)
-  (build-view-screen window id))
-
-(define (build-edit-screen window id)
-  (clean window)
-  (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
-  (gtk_box_set_spacing box 20)
-  (gtk_widget_set_margin_top box 20)
-  (gtk_widget_set_margin_start box 20)
-  (gtk_widget_set_margin_end box 20)
-  (gtk_widget_set_margin_bottom box 20)
-  (gtk_container_add window box)
-
-  (define form (gtk_grid_new))
-  (gtk_grid_set_column_spacing form 20)
-  (gtk_grid_set_row_spacing form 10)
-  (gtk_box_pack_start box form 1 1 5)
-
-  (define item (get-item db id))
-
-  (add-edit-buttons form (get-name item) (get-path item)
-                    (number->string (get-curr-ep item))
-                    (number->string (get-total-eps item))
-                    (or (get-video-player item) "")
-                    (get-cover item))
-
-  (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
-  (define add-button (gtk_button_new_with_label "Save"))
-  (define back-button (gtk_button_new_with_label "Cancel"))
-  (gtk_box_pack_start button-box add-button 1 1 5)
-  (gtk_box_pack_end button-box back-button 1 1 5)
-
-  (gtk_box_pack_end box button-box 0 0 5)
-
-  (g_signal_connect add-button "clicked" #$save_edit_button
-                        (address->pointer id))
-  (g_signal_connect back-button "clicked" #$go_view
-                        (address->pointer id))
-
-  (gtk_widget_show_all window))
-
-
-(define-external
-  (remove_button
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (define confirm-dialog (gtk_message_dialog_new
-                           window
-                           0
-                           GTK_MESSAGE_QUESTION
-                           GTK_BUTTONS_OK_CANCEL
-                           "Are you sure you want to delete this?"))
-  (define response (gtk_dialog_run confirm-dialog))
-  (gtk_widget_destroy confirm-dialog)
-  (if (= response GTK_RESPONSE_OK)
-    (begin
-      (define id (data->id data))
-      (set! db (remove-item db id))
-      (build-main-screen window))))
-
-(define-external
-  (edit_button
-    ((pointer "GtkWidget") widget)
-    (c-pointer data))
-  void
-  (define id (data->id data))
-  (build-edit-screen window id))
-
-(define (make-title-label text)
-  (define title-label (gtk_label_new text))
-  ;(gtk_label_set_xalign title-label 0)
-  (define title-attrs (pango_attr_list_new))
-  (define attr-weight (pango_attr_weight_new PANGO_WEIGHT_BOLD))
-  (pango_attr_list_insert title-attrs attr-weight)
-  (define attr-scale (pango_attr_scale_new 1.5))
-  (pango_attr_list_insert title-attrs attr-scale)
-  (gtk_label_set_attributes title-label title-attrs)
-  ; should I actually free this myself? it segfaults! scary scary
-  ;(pango_attribute_destroy attr)
-  (pango_attr_list_unref title-attrs)
-  title-label)
-
-(foreign-declare
-  "static GtkTargetEntry my_target_table[] = {{ \"text/plain\", 0, 0 }};")
-
-(define (get-g-string* ptr)
-  ; we pass the pointer through here to get a chicken string
-  ; just like calling ##sys#peek-c-string, but without undocumented stuff
-  (define g-string-passtrough
-    (foreign-lambda* c-string ((c-pointer p))
-      "C_return(p);"))
-  (define managed-string (g-string-passtrough ptr))
-  ;(define managed-string (##sys#peek-c-string ptr '0))
-  (g_free ptr)
-  managed-string)
-
-; we can't use bind generated definitions because they don't call g_free
-(define (my_gtk_selection_data_get_text selection)
-  (get-g-string*
-    ((foreign-lambda c-pointer
-                     "gtk_selection_data_get_text"
-                     c-pointer) selection)))
-
-; note that gtk_entry_get_text doesn't return a copy, so we must not
-; call g_free on it's returned pointer
-
-(define (magic-drop-cover uri id)
-  (define item (get-item db id))
-  (print item)
-  (printf "text ~S~%" uri)
-  (define protocol-match
-    (irregex-search "^(.*)://(.*)" uri))
-  (if protocol-match
-    (begin
-      (define protocol-name (irregex-match-substring
-                              protocol-match 1))
-      (printf "protocol ~A~%" protocol-name)
-      (if (equal? protocol-name "file")
-        (begin
-          ;todo maybe copy to xdg_data?
-          (define path (irregex-match-substring
-                         protocol-match 2))
-          (set-cover item (uri-decode-string path))
-          (printf "path ~A~%" path)))
-      (if (or (equal? protocol-name "http")
-              (equal? protocol-name "https"))
-        (begin
-          (define url uri)
-          (printf "url ~A~%" url)
-          (define file-name (format #f "~A~A~A"
-                                    xdg-data
-                                    (clean-name (get-name item))
-                                    (get-extension url)))
-          (download-image url file-name)
-          (set-cover item file-name))))))
-
 (define-external
   (receive_drop
     ((pointer "GtkWidget") widget)
@@ -720,49 +619,6 @@
   (magic-drop-cover dropped-text id)
   (build-view-screen window id))
 
-(define-external
-  (receive_drop_main
-    ((pointer "GtkWidget") widget)
-    (c-pointer context)
-    (int x)
-    (int y)
-    (c-pointer data)
-    (unsigned-int info)
-    (unsigned-int time)
-    (c-pointer user-data))
-  void
-  ; fixme free the string
-  (define dropped-text
-    (string-trim-both
-      (my_gtk_selection_data_get_text data)))
-  (define id (data->id user-data))
-  (magic-drop-cover dropped-text id)
-  (update-cover-main-screen id))
-
-(define (update-cover-main-screen id)
-  (print id)
-  (define item (get-item db id))
-  (define cover-box (cdr (assoc id cover-images)))
-  (clean-container cover-box)
-
-  (define cover (get-cover item))
-  (define pixbuf
-     (if cover
-       (gdk_pixbuf_new_from_file_at_size cover 200 200 #f)
-       #f))
-  (define image
-     (if pixbuf
-       (gtk_image_new_from_pixbuf pixbuf)
-       (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
-  (if pixbuf (g_object_unref pixbuf))
-  (gtk_box_pack_start cover-box image 1 1 5)
-  (define title-label (gtk_label_new (get-name item)))
-  (gtk_label_set_line_wrap title-label 1)
-  (gtk_label_set_max_width_chars title-label 18)
-  (gtk_box_pack_start cover-box title-label 0 1 5)
-
-  (gtk_widget_show_all window)
-  #f)
 
 (define (build-view-screen window id)
   (clean window)
@@ -855,18 +711,78 @@
 
   (gtk_widget_show_all window))
 
+; View screen helpers
+
+; neet-like
+(define (find-ep dir num)
+  (set! dir (ensure-trailing-slash dir))
+  (if (not (directory? dir))
+    (print "error: not a directory")
+    (begin
+      (define file-list (directory dir #t))
+      ; These are stolen from onodera's neet source
+      (define regexes
+        (map (lambda (r) (irregex (format #f r num)))
+          (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
+                "( |_|-|#|\\.)[0 ]*~A[^0-9]"
+                "(^|[^0-9])[0 ]*~A[^0-9]"
+                "~A[^0-9]")))
+
+      (define (find-file file-list regexes)
+         (if (null? regexes)
+           #f
+           (begin
+             (define matches
+               (filter (lambda (s) (irregex-search (car regexes) s))
+                       file-list))
+             (if (null? matches)
+               (find-file file-list (cdr regexes)))
+             (car matches))))
+      (define f (find-file file-list regexes))
+
+      (if f
+        (format #f "~A~A" dir f)
+        (begin
+          (print "error: file not found")
+          #f)))))
+
+(define (watch id)
+  (define item (get-item db id))
+  (define dir (get-path item))
+  (define fn (find-ep dir (get-curr-ep item)))
+  (if fn
+    (begin
+      (printf "watch ~A ~A ~A~%"
+              (get-name item) (get-curr-ep item) fn)
+      (define video-player (or (get-video-player item)
+                              (get-default-video-player db)))
+      (define cmd-string
+        (append (string-split video-player) (list fn)))
+      (process-run (car cmd-string) (cdr cmd-string)))
+    (gtk-warn "Couldn't find your file")))
+
+; Add New screen
+
 (define-external
-  (save_settings_button
+  (add_button
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
+  (define name (gtk_entry_get_text name-entry))
+  (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
+  (define total (or (string->number (gtk_entry_get_text total-entry))
+                    (max curr 24)))
   (define video-player (gtk_entry_get_text video-player-entry))
-  (set-default-video-player db video-player)
-  (if selected-path
-    (set-default-path db selected-path))
-  (build-main-screen window))
+  (define cover selected-image-path)
+  (add-item db curr total name
+    (or selected-path
+        (get-default-path db))
+    video-player
+    cover)
+  ;(build-main-screen window)
+  (build-view-screen window (- (length (get-item-list db)) 1)))
 
-(define (build-settings-screen window)
+(define (build-add-screen window)
   (clean window)
   (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
   (gtk_box_set_spacing box 20)
@@ -881,27 +797,66 @@
   (gtk_grid_set_row_spacing form 10)
   (gtk_box_pack_start box form 1 1 5)
 
-  (define video-player (get-default-video-player db))
-  (define video-player-label (gtk_label_new "Video Player:"))
-  (gtk_label_set_xalign video-player-label 1)
-  (set! video-player-entry (gtk_entry_new))
-  (gtk_entry_set_text video-player-entry video-player)
-  (gtk_widget_set_hexpand video-player-entry 1)
-  (gtk_grid_attach form video-player-label 0 0 1 1)
-  (gtk_grid_attach form video-player-entry 1 0 3 1)
+  (add-edit-buttons form "" (get-default-path db) "1" "24" "" #f)
 
-  (define path (get-default-path db))
-  (define path-label (gtk_label_new "Default Path:"))
-  (gtk_label_set_xalign path-label 1)
-  (define path-picker
-    (gtk_file_chooser_button_new "Select the default path"
-                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER))
-  (g_signal_connect path-picker "file-set" #$path_picked #f)
-  (if path
-    (gtk_file_chooser_set_filename path-picker path))
-  (gtk_widget_set_hexpand path-picker 1)
-  (gtk_grid_attach form path-label 0 1 1 1)
-  (gtk_grid_attach form path-picker 1 1 3 1)
+  (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (define add-button (gtk_button_new_with_label "Add"))
+  (define back-button (gtk_button_new_with_label "Cancel"))
+  (gtk_box_pack_start button-box add-button 1 1 5)
+  (gtk_box_pack_end button-box back-button 1 1 5)
+
+  (gtk_box_pack_end box button-box 0 0 5)
+
+  (g_signal_connect add-button "clicked" #$add_button #f)
+  (g_signal_connect back-button "clicked" #$go_back #f)
+
+  (gtk_widget_show_all window))
+
+; Edit Screen
+
+(define-external
+  (save_edit_button
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define id (data->id data))
+  (define name (gtk_entry_get_text name-entry))
+  (define curr (or (string->number (gtk_entry_get_text curr-entry)) 0))
+  (define total (or (string->number (gtk_entry_get_text total-entry))
+                    (max curr 24)))
+  (define video-player (gtk_entry_get_text video-player-entry))
+  (define item (get-item db id))
+  (set-name item name)
+  (if selected-path
+    (set-path item selected-path))
+  (set-curr-ep item curr)
+  (set-total-eps item total)
+  (set-video-player item video-player)
+  (set-cover item selected-image-path)
+  (build-view-screen window id))
+
+(define (build-edit-screen window id)
+  (clean window)
+  (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (gtk_box_set_spacing box 20)
+  (gtk_widget_set_margin_top box 20)
+  (gtk_widget_set_margin_start box 20)
+  (gtk_widget_set_margin_end box 20)
+  (gtk_widget_set_margin_bottom box 20)
+  (gtk_container_add window box)
+
+  (define form (gtk_grid_new))
+  (gtk_grid_set_column_spacing form 20)
+  (gtk_grid_set_row_spacing form 10)
+  (gtk_box_pack_start box form 1 1 5)
+
+  (define item (get-item db id))
+
+  (add-edit-buttons form (get-name item) (get-path item)
+                    (number->string (get-curr-ep item))
+                    (number->string (get-total-eps item))
+                    (or (get-video-player item) "")
+                    (get-cover item))
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Save"))
@@ -911,171 +866,273 @@
 
   (gtk_box_pack_end box button-box 0 0 5)
 
-  (g_signal_connect add-button "clicked" #$save_settings_button #f)
-  (g_signal_connect back-button "clicked" #$go_back #f)
+  (g_signal_connect add-button "clicked" #$save_edit_button
+                        (address->pointer id))
+  (g_signal_connect back-button "clicked" #$go_view
+                        (address->pointer id))
 
   (gtk_widget_show_all window))
 
+
+; add / edit controls
+
 (define-external
-  (go_settings
+  (image_picked
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  (build-settings-screen window))
-
-(define search-bar #f)
+  (set! selected-image-path
+    (gtk_file_chooser_get_filename widget)))
 
 (define-external
-  (search_changed
+  (image_download
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  (build-button-box)
-  (gtk_widget_show_all window))
+  (define file-name
+    (auto-download-image (gtk_entry_get_text name-entry)))
+  (if file-name
+    (begin
+      (gtk_file_chooser_set_filename image-path-picker file-name)
+      (set! selected-image-path file-name))
+    (print "couldn't get image"))) ; todo handle this better
 
-(define button-box #f)
 
-(define cover-images '())
+(define (add-edit-buttons form name path curr total video-player cover)
+  (define name-label (gtk_label_new "Name:"))
+  (gtk_label_set_xalign name-label 1)
+  (set! name-entry (gtk_entry_new))
+  (gtk_entry_set_text name-entry name)
+  (gtk_widget_set_hexpand name-entry 1)
+  (gtk_grid_attach form name-label 0 0 1 1)
+  (gtk_grid_attach form name-entry 1 0 3 1)
 
-(define (build-button-box)
-  (clean-container button-box)
+  (define path-label (gtk_label_new "Path:"))
+  (gtk_label_set_xalign path-label 1)
 
-  (define regex (irregex (gtk_entry_get_text search-bar) 'i))
-  (define (search-filter item)
-    (irregex-search regex (get-name item)))
+  (define path-picker
+    (gtk_file_chooser_button_new "Select the search path"
+                                 GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER))
+  (set! selected-path #f)
+  (g_signal_connect path-picker "file-set" #$path_picked #f)
+  (if path
+    (gtk_file_chooser_set_filename path-picker path))
 
-  ; download missing
-  ;(map (lambda (item)
-  ;       (if (not (get-cover item))
-  ;         (begin
-  ;           (format #t "Downloading cover for ~A~%" (get-name item))
-  ;           (define image-path (download-image (get-name item)))
-  ;           (print image-path)
-  ;           (if image-path (set-cover item image-path))))
-  ;     (get-item-list db)))
+  (gtk_widget_set_hexpand path-picker 1)
 
-  ; add ids
-  (define i 0)
-  (define items
-    (map (lambda (item)
-           (begin
-             (define new-item (alist-cons 'id i item))
-             (set! i (+ 1 i))
-             new-item))
-         (get-item-list db)))
+  (gtk_grid_attach form path-label 0 1 1 1)
+  (gtk_grid_attach form path-picker 1 1 3 1)
 
-  (define items (sort (filter search-filter items)
-                  (lambda (a b) (string<? (get-name a)
-                                          (get-name b)))))
+  (define image-path-label (gtk_label_new "Cover Image Path:"))
+  (gtk_label_set_xalign image-path-label 1)
+  ;(set! image-path-entry (gtk_entry_new))
+  ;(gtk_entry_set_text image-path-entry "image path here")
+  (set! image-path-picker
+    (gtk_file_chooser_button_new "Select the cover image"
+                                 GTK_FILE_CHOOSER_ACTION_OPEN))
+  (if cover
+    (begin
+      (gtk_file_chooser_set_filename image-path-picker cover)
+      (set! selected-image-path cover)))
+  (set! selected-path #f)
+  (g_signal_connect image-path-picker "file-set" #$image_picked #f)
+  (define image-filter (gtk_file_filter_new))
+  (gtk_file_filter_add_mime_type image-filter "image/*")
+  (gtk_file_filter_set_name image-filter "Image File")
+  (gtk_file_chooser_add_filter image-path-picker image-filter)
+  (gtk_widget_set_hexpand image-path-picker 1)
+  (define fetch-image-button (gtk_button_new_with_label "Download"))
+  (g_signal_connect fetch-image-button "clicked" #$image_download #f)
+  (gtk_grid_attach form image-path-label 0 2 1 1)
+  (gtk_grid_attach form image-path-picker 1 2 2 1)
+  (gtk_grid_attach form fetch-image-button 3 2 1 1)
 
-  (set! cover-images '())
+  (define eps-label (gtk_label_new "Current Episode:"))
+  (gtk_label_set_xalign eps-label 1)
+  (set! curr-entry (gtk_entry_new))
+  (gtk_entry_set_text curr-entry curr)
+  (gtk_widget_set_hexpand curr-entry 1)
+  (define eps-slash (gtk_label_new "/"))
+  (set! total-entry (gtk_entry_new))
+  (gtk_entry_set_text total-entry total)
+  (gtk_widget_set_hexpand total-entry 1)
+  (gtk_grid_attach form eps-label 0 3 1 1)
+  (gtk_grid_attach form curr-entry 1 3 1 1)
+  (gtk_grid_attach form eps-slash 2 3 1 1)
+  (gtk_grid_attach form total-entry 3 3 1 1)
 
-  (for-each
-    (lambda (item)
-      (define item-id (cdr (assoc 'id item)))
-      (define cover-event-box (gtk_event_box_new))
-      (gtk_widget_set_events cover-event-box GDK_BUTTON_PRESS_MASK)
-      (define cover-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
-      (set! cover-images (append! cover-images
-                                  `((,item-id . ,cover-box))))
-      (gtk_container_add cover-event-box cover-box)
-      (gtk_widget_set_size_request cover-box 100 200)
-      (define cover (get-cover item))
-      (define pixbuf
-        (if cover
-          (gdk_pixbuf_new_from_file_at_size cover 200 200 #f)
-          #f))
-      (define image
-        (if pixbuf
-          (gtk_image_new_from_pixbuf pixbuf)
-          (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
+  (define video-player-label (gtk_label_new "Video Player:"))
+  (gtk_label_set_xalign video-player-label 1)
+  (set! video-player-entry (gtk_entry_new))
+  (gtk_entry_set_text video-player-entry video-player)
+  (gtk_widget_set_hexpand video-player-entry 1)
+  (gtk_grid_attach form video-player-label 0 4 1 1)
+  (gtk_grid_attach form video-player-entry 1 4 3 1))
 
-      (if pixbuf (g_object_unref pixbuf))
-      (gtk_box_pack_start cover-box image 1 1 5)
-      ;(define vbutton (gtk_button_new_with_label (get-name item)))
-      (define title-label (gtk_label_new (get-name item)))
-      (gtk_label_set_line_wrap title-label 1)
-      (gtk_label_set_max_width_chars title-label 18)
-      (gtk_box_pack_start cover-box title-label 0 1 5)
-      (g_signal_connect cover-event-box "button-press-event"
-                        #$cover_button_press
-                        (address->pointer item-id))
+; add / edit helpers
 
-      (gtk_drag_dest_set
-         cover-event-box GTK_DEST_DEFAULT_ALL
-         (foreign-value "my_target_table" c-pointer)
-         1 GDK_ACTION_COPY)
+(define name-entry #f)
+(define selected-path #f)
+(define selected-image-path #f)
+(define image-path-picker #f)
 
-      (g_signal_connect
-         cover-event-box "drag-data-received"
-         #$receive_drop_main (address->pointer item-id))
+(define curr-entry #f)
+(define total-entry #f)
+(define video-player-entry #f)
 
-      (gtk_flow_box_insert button-box cover-event-box -1))
-    items))
+(define (prettify name)
+  (string-titlecase
+    (let ((name (irregex-replace/all "\\[.*\\]" name "")))
+      (set! name
+        (irregex-replace/all "_|-|\\.|[[:space:]]" name " "))
+      (irregex-replace/all " +" name " "))))
 
-(define (build-main-screen window)
-  (clean window)
+; The Movie DB
 
-  (define main-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+(define tmdb "https://api.themoviedb.org/3/")
+(define tmdb-key "api_key=fd7b3b3e7939e8eb7c8e26836b8ea410")
+(define base-url #f)
 
-  (gtk_container_add window main-box)
+(define (get-extension fn)
+  (define m (irregex-search "\\..*" (irregex-replace ".*/" fn "")))
+  (if m (irregex-match-substring m) ""))
 
-  ;(gtk_container_add window scrollable)
+(define (clean-name name) ; for tmdb search
+  (string-trim-both (irregex-replace/all "\\(.*\\)|/" name "")))
 
-  (gtk_box_set_spacing main-box 20)
-  (gtk_widget_set_margin_top main-box 20)
-  (gtk_widget_set_margin_start main-box 20)
-  (gtk_widget_set_margin_end main-box 20)
-  (gtk_widget_set_margin_bottom main-box 20)
+(define (download-image image-url file-name)
+  (print "downloading...")
+  (call-with-input-request
+    image-url #f
+    (lambda (rport)
+      (call-with-output-file
+        file-name
+        (lambda (wport)
+          (do ((byte (read-byte rport) (read-byte rport)))
+            ((eof-object? byte) #f)
+            (write-byte byte wport))))))
+  (print "downloaded!"))
 
-  ; Title and settings
-  (define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
-  (define title-label (make-title-label app-title))
-  (gtk_box_set_center_widget title-box title-label)
-  (define settings-button (gtk_button_new_from_icon_name
-                            "gtk-preferences"
-                            GTK_ICON_SIZE_BUTTON))
-  (g_signal_connect settings-button "clicked" #$go_settings #f)
-  (gtk_box_pack_end title-box settings-button 0 1 0)
-  (gtk_box_pack_start main-box title-box 0 1 5)
+(define (auto-download-image dirty-name)
+  (define name (uri-encode-string (clean-name dirty-name)))
+  (define file-name (format #f "~A~A" xdg-data name)) ;missing ext
+  (print name)
+  (define url (format #f "~Asearch/multi?query=~A&~A"
+                      tmdb name tmdb-key))
+  (print url)
+  (define response
+    (condition-case
+      (read-json (with-input-from-request url #f read-string))
+      [(exn http) (begin
+                   (gtk-warn "HTTP error")
+                   '((results . #())))]))
+  ;(print response)
+  (define results (cdr (assoc 'results response)))
+  (if (= 0 (vector-length results))
+    #f ; todo error out
+    (begin
+      (define result (vector-ref results 0))
+      (define poster-path (cdr (assoc 'poster_path result)))
+      (if (not base-url)
+        (begin
+          (define url (format #f "~Aconfiguration?~A"
+                              tmdb tmdb-key))
+          (define config
+            (read-json
+              (with-input-from-request url #f read-string)))
+          (set! base-url
+            (cdr (assoc 'base_url (cdr (assoc 'images config)))))))
+      (define image-url (format #f "~Aoriginal~A"
+                                base-url poster-path))
+      (print image-url)
+      (set! file-name (format #f "~A~A" file-name
+                              (get-extension poster-path)))
+      (print file-name)
+      (download-image image-url file-name)
+      file-name)))
 
-  ; search bar
-  (define search-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
-  (gtk_box_pack_start main-box search-box 0 1 5)
-  (set! search-bar (gtk_search_entry_new))
+; Drag & Drop
 
-  (define search-bar-sc (gtk_widget_get_style_context search-bar))
-  (define s-css-provider (gtk_css_provider_new))
-  (gtk_css_provider_load_from_path s-css-provider "search.css" #f)
-  (gtk_style_context_add_provider
-    search-bar-sc s-css-provider
-    GTK_STYLE_PROVIDER_PRIORITY_APPLICATION)
+(foreign-declare
+  "static GtkTargetEntry my_target_table[] = {{ \"text/plain\", 0, 0 }};")
 
-  (gtk_box_pack_start search-box search-bar 1 1 5)
-  (g_signal_connect search-bar "search-changed" #$search_changed #f)
+(define (get-g-string* ptr)
+  ; we pass the pointer through here to get a chicken string
+  ; just like calling ##sys#peek-c-string, but without undocumented stuff
+  (define g-string-passtrough
+    (foreign-lambda* c-string ((c-pointer p))
+      "C_return(p);"))
+  (define managed-string (g-string-passtrough ptr))
+  ;(define managed-string (##sys#peek-c-string ptr '0))
+  (g_free ptr)
+  managed-string)
 
-  (define scrollable (gtk_scrolled_window_new #f #f))
-  (define viewport (gtk_viewport_new #f #f))
-  (gtk_container_add scrollable viewport)
+; we can't use bind generated definitions because they don't call g_free
+(define (my_gtk_selection_data_get_text selection)
+  (get-g-string*
+    ((foreign-lambda c-pointer
+                     "gtk_selection_data_get_text"
+                     c-pointer) selection)))
 
-  (gtk_box_pack_start main-box scrollable 1 1 0)
+; note that gtk_entry_get_text doesn't return a copy, so we must not
+; call g_free on it's returned pointer
 
-  (set! button-box (gtk_flow_box_new))
-  (gtk_flow_box_set_selection_mode button-box GTK_SELECTION_NONE)
-  ;(set! button-box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
-  (gtk_container_add viewport button-box)
+(define (magic-drop-cover uri id)
+  (define item (get-item db id))
+  (print item)
+  (printf "text ~S~%" uri)
+  (define protocol-match
+    (irregex-search "^(.*)://(.*)" uri))
+  (if protocol-match
+    (begin
+      (define protocol-name (irregex-match-substring
+                              protocol-match 1))
+      (printf "protocol ~A~%" protocol-name)
+      (if (equal? protocol-name "file")
+        (begin
+          ;todo maybe copy to xdg_data?
+          (define path (irregex-match-substring
+                         protocol-match 2))
+          (set-cover item (uri-decode-string path))
+          (printf "path ~A~%" path)))
+      (if (or (equal? protocol-name "http")
+              (equal? protocol-name "https"))
+        (begin
+          (define url uri)
+          (printf "url ~A~%" url)
+          (define file-name (format #f "~A~A~A"
+                                    xdg-data
+                                    (clean-name (get-name item))
+                                    (get-extension url)))
+          (download-image url file-name)
+          (set-cover item file-name))))))
 
-  ;(gtk_box_set_spacing button-box 20)
+(define (update-cover-main-screen id)
+  (print id)
+  (define item (get-item db id))
+  (define cover-box (cdr (assoc id cover-images)))
+  (clean-container cover-box)
 
-  (build-button-box)
+  (define cover (get-cover item))
+  (define pixbuf
+     (if cover
+       (gdk_pixbuf_new_from_file_at_size cover 200 200 #f)
+       #f))
+  (define image
+     (if pixbuf
+       (gtk_image_new_from_pixbuf pixbuf)
+       (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
+  (if pixbuf (g_object_unref pixbuf))
+  (gtk_box_pack_start cover-box image 1 1 5)
+  (define title-label (gtk_label_new (get-name item)))
+  (gtk_label_set_line_wrap title-label 1)
+  (gtk_label_set_max_width_chars title-label 18)
+  (gtk_box_pack_start cover-box title-label 0 1 5)
 
-  (define add-button (gtk_button_new_from_icon_name
-                       "gtk-add"
-                       GTK_ICON_SIZE_BUTTON))
-  (g_signal_connect add-button "clicked" #$go_add #f)
-  (gtk_box_pack_end search-box add-button 0 1 0)
+  (gtk_widget_show_all window)
+  #f)
 
-  (gtk_widget_show_all window))
+; Gtk entry & exit points
 
 (define-external
   (destroy
