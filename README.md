@@ -78,8 +78,7 @@ file and create one for you.
 ## TO-DOs/known bugs
 
 * The logo. Why didn't we start with the logo?
-* Make the thing faster
-* I've had it crash in the middle of downloads (something something C_temporary_stack_bottom)
+* I've had it crash at random times (something something C_temporary_stack_bottom)
 * The code is not pretty. Don't judge me as a programmer for it
   (it was my first scheme project after all)
 * Can't delete the last item
