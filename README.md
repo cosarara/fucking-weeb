@@ -67,17 +67,11 @@ Plus the following chicken eggs:
 
 Install gtk3 and chicken from your distro's repositories, then run:
 
-    $ mkdir -p "prefix/lib/chicken/8/"
-    $ unset CHICKEN_REPOSITORY
-    $ chicken-install -init "prefix/lib/chicken/8"
-    $ export CHICKEN_REPOSITORY="prefix/lib/chicken/8"
-    $ chicken-install -p "prefix" bind http-client uri-common openssl medea
-    $ make deployable
-    $ rm deploy_dir/weeb/*.setup-info
+    $ make deps-and-all
     $ sudo make install
 
-You can then remove everything from the source directory.
 Fucking Weeb will be installed in /opt/weeb with a symlink in /usr/bin.
+You can uninstall chicken too, if you want.
 
 The first time you run it, it will complain about having no database
 file and create one for you (in your $XDG_HOME).
@@ -87,15 +81,22 @@ file and create one for you (in your $XDG_HOME).
 You can either bundle everything into one package
 (like we did in the quick instructions),
 so that the only dependency is gtk3, or make a normal development build, which
-will link to the files inside your CHICKEN_REPOSITORY.
+will link to the files inside your $CHICKEN_REPOSITORY.
+
+If you are going to be doing more than one build, the deps-and-all target
+is very inefficient (since it downloads the dependencies to a temporary directory
+every time).
+
+Read the makefile to see how it works.
 
 I keep my chicken eggs in _~/.local/lib/chicken/8_.
 Read [this][chicken-install] for the original instructions.
 
-_bind_ tries to install a binary in /usr/bin even with the CHICKEN_REPOSITORY
-env var, and that's why we use -p in the quick instructions.
+_bind_ tries to install a binary in /usr/bin even with the $CHICKEN_REPOSITORY
+env var, and that's why need to use -p unless we want to run chicken-install as root.
 
-You could also install them as root in /usr/.
+You could also install everything as root in /usr/ (that's the default if you don't
+set a $CHICKEN_REPOSITORY).
 
 Anyway, once you have the dependencies installed with chicken-install, and
 in either CHICKEN_REPOSITORY or the global path, you can run either

@@ -1,6 +1,6 @@
 all : weeb
 
-.PHONY : all deployable install
+.PHONY : all deployable install deps-and-all
 
 CFLAGS = "`pkg-config --cflags gtk+-3.0`"
 LDFLAGS = "`pkg-config --libs gtk+-3.0`"
@@ -32,3 +32,14 @@ install : deployable
 	install -d $(BINDIR)
 	cp -r deploy_dir/* $(INSTALL_DIR)
 	ln -s $(INSTALL_DIR)/weeb/weeb $(BINDIR)/weeb
+
+deps-and-all :
+	rm -rf prefix
+	mkdir -p "prefix/lib/chicken/8/"
+	unset CHICKEN_REPOSITORY
+	chicken-install -init "prefix/lib/chicken/8"
+	export CHICKEN_REPOSITORY="prefix/lib/chicken/8"
+	chicken-install -p "prefix" bind http-client uri-common openssl medea
+	$(MAKE) deployable
+	rm deploy_dir/weeb/*.setup-info
+
