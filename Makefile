@@ -31,7 +31,7 @@ install : deployable
 	install -d $(INSTALL_DIR)
 	install -d $(BINDIR)
 	cp -r deploy_dir/* $(INSTALL_DIR)
-	ln -s $(INSTALL_DIR)/weeb/weeb $(BINDIR)/weeb
+	ln -s $(PREFIX)/weeb/weeb $(BINDIR)/weeb
 
 deps-and-all :
 	rm -rf prefix
