@@ -114,7 +114,6 @@ move around to any system that has a compatible libc and gtk3 installed.
   (it was my first scheme project after all)
 * Shit's ugly when you have only one row of posters
 * Need a better poster-not-found image
-* Openssl doesn't work from a deployed build
 
 [the video]: http://www.cosarara.me/jaume/files/videos/fucking-weeb.webm
 [TMDb]: https://www.themoviedb.org/
