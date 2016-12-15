@@ -102,6 +102,9 @@
 (define (get-item-list db)
   (cdr (assoc 'items db)))
 
+(define (set-item-list db items)
+  (set-cdr! (assoc 'items db) items))
+
 (define (get-item db id)
   (list-ref (cdr (assoc 'items db)) id))
 
@@ -119,7 +122,7 @@
 (define (remove-item db n)
   (define items (get-item-list db))
   (if (= n 0)
-    (set! items (cdr items))
+    (set-item-list db (cdr items))
     (set-cdr! (list-tail items (- n 1)) (cdr (list-tail items n))))
   db)
 
@@ -1033,8 +1036,9 @@
   (define response
     (condition-case
       (read-json (with-input-from-request url #f read-string))
-      [(exn http) (begin
+      [e (exn http) (begin
                    (gtk-warn "HTTP error")
+                   (print e)
                    '((results . #())))]))
   ;(print response)
   (define results (cdr (assoc 'results response)))

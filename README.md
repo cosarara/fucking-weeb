@@ -112,9 +112,9 @@ move around to any system that has a compatible libc and gtk3 installed.
 * I've had it crash at random times (something something C_temporary_stack_bottom)
 * The code is not pretty. Don't judge me as a programmer for it
   (it was my first scheme project after all)
-* Can't delete the last item
 * Shit's ugly when you have only one row of posters
 * Need a better poster-not-found image
+* Openssl doesn't work from a deployed build
 
 [the video]: http://www.cosarara.me/jaume/files/videos/fucking-weeb.webm
 [TMDb]: https://www.themoviedb.org/
