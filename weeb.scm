@@ -358,6 +358,8 @@
   (magic-drop-cover dropped-text id)
   (update-cover-main-screen id))
 
+(define pixbuf-cache '())
+
 (define (build-button-box)
   (clean-container button-box)
 
@@ -386,8 +388,8 @@
          (get-item-list db)))
 
   (define items (sort (filter search-filter items)
-                  (lambda (a b) (string<? (get-name a)
-                                          (get-name b)))))
+                      (lambda (a b) (string<? (get-name a)
+                                              (get-name b)))))
 
   (set! cover-images '())
 
@@ -402,18 +404,22 @@
       (gtk_container_add cover-event-box cover-box)
       (gtk_widget_set_size_request cover-box 100 200)
       (define cover (get-cover item))
+      (define cached (assoc cover pixbuf-cache))
       (define pixbuf
         (if cover
-          (gdk_pixbuf_new_from_file_at_size cover 200 200 #f)
+          (if cached
+            (cdr cached)
+            (gdk_pixbuf_new_from_file_at_size cover 200 200 #f))
           #f))
+      (if (and pixbuf (not cached))
+        (set! pixbuf-cache (alist-cons cover pixbuf pixbuf-cache)))
+
       (define image
         (if pixbuf
           (gtk_image_new_from_pixbuf pixbuf)
           (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
 
-      (if pixbuf (g_object_unref pixbuf))
       (gtk_box_pack_start cover-box image 1 1 5)
-      ;(define vbutton (gtk_button_new_with_label (get-name item)))
       (define title-label (gtk_label_new (get-name item)))
       (gtk_label_set_line_wrap title-label 1)
       (gtk_label_set_max_width_chars title-label 18)
@@ -423,13 +429,13 @@
                         (address->pointer item-id))
 
       (gtk_drag_dest_set
-         cover-event-box GTK_DEST_DEFAULT_ALL
-         (foreign-value "my_target_table" c-pointer)
-         1 GDK_ACTION_COPY)
+        cover-event-box GTK_DEST_DEFAULT_ALL
+        (foreign-value "my_target_table" c-pointer)
+        1 GDK_ACTION_COPY)
 
       (g_signal_connect
-         cover-event-box "drag-data-received"
-         #$receive_drop_main (address->pointer item-id))
+        cover-event-box "drag-data-received"
+        #$receive_drop_main (address->pointer item-id))
 
       (gtk_flow_box_insert button-box cover-event-box -1))
     items))
