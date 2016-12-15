@@ -277,7 +277,11 @@
 
   (define search-bar-sc (gtk_widget_get_style_context search-bar))
   (define s-css-provider (gtk_css_provider_new))
-  (gtk_css_provider_load_from_path s-css-provider "search.css" #f)
+  (gtk_css_provider_load_from_path
+    s-css-provider
+    (if (file-exists? "search.css")
+      "search.css"
+      (format #f "~A/search.css" (repository-path))) #f)
   (gtk_style_context_add_provider
     search-bar-sc s-css-provider
     GTK_STYLE_PROVIDER_PRIORITY_APPLICATION)

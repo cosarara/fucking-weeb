@@ -25,7 +25,10 @@ deploy_dir/weeb/coops.so :
 	mkdir -p deploy_dir/weeb
 	chicken-install -deploy -p deploy_dir/weeb bind http-client uri-common openssl medea
 
-deployable : deploy_dir/weeb/weeb deploy_dir/weeb/coops.so
+deploy_dir/weeb/search.css : search.css
+	cp search.css deploy_dir/weeb
+
+deployable : deploy_dir/weeb/weeb deploy_dir/weeb/coops.so deploy_dir/weeb/search.css
 
 install : deployable
 	install -d $(INSTALL_DIR)
