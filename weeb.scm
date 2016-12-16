@@ -1056,14 +1056,19 @@
               (with-input-from-request url #f read-string)))
           (set! base-url
             (cdr (assoc 'base_url (cdr (assoc 'images config)))))))
-      (define image-url (format #f "~Aoriginal~A"
-                                base-url poster-path))
-      (print image-url)
-      (set! file-name (format #f "~A~A" file-name
-                              (get-extension poster-path)))
-      (print file-name)
-      (download-image image-url file-name)
-      file-name)))
+      (if (or (null? poster-path) (eqv? 'null poster-path))
+        (and
+          (gtk-warn "Couldn't find the poster in tmdb's response")
+          #f)
+        (begin
+          (define image-url (format #f "~Aoriginal~A"
+                                    base-url poster-path))
+          (print image-url)
+          (set! file-name (format #f "~A~A" file-name
+                                  (get-extension poster-path)))
+          (print file-name)
+          (download-image image-url file-name)
+          file-name)))))
 
 ; Drag & Drop
 
