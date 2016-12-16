@@ -426,7 +426,7 @@
           (gtk_image_new_from_pixbuf pixbuf)
           (gtk_image_new_from_icon_name "gtk-missing-image" 1)))
 
-      (gtk_box_pack_start cover-box image 1 1 5)
+      (gtk_box_pack_start cover-box image 0 1 5)
       (define title-label (gtk_label_new (get-name item)))
       (gtk_label_set_line_wrap title-label 1)
       (gtk_label_set_max_width_chars title-label 18)
