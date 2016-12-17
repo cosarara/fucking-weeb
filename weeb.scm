@@ -742,34 +742,39 @@ EOF
 (define (find-ep dir num)
   (set! dir (ensure-trailing-slash dir))
   (if (not (directory? dir))
-    (print "error: not a directory")
+    (gtk-warn "Your directory doesn't look like a directory")
     (begin
       (define file-list (directory dir #t))
-      ; These are stolen from onodera's neet source
-      (define regexes
-        (map (lambda (r) (irregex (format #f r num)))
-          (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
-                "( |_|-|#|\\.)[0 ]*~A[^0-9]"
-                "(^|[^0-9])[0 ]*~A[^0-9]"
-                "~A[^0-9]")))
-
-      (define (find-file file-list regexes)
-         (if (null? regexes)
-           #f
-           (begin
-             (define matches
-               (filter (lambda (s) (irregex-search (car regexes) s))
-                       file-list))
-             (if (null? matches)
-               (find-file file-list (cdr regexes)))
-             (car matches))))
-      (define f (find-file file-list regexes))
-
-      (if f
-        (format #f "~A~A" dir f)
+      (if (null? file-list)
         (begin
-          (print "error: file not found")
-          #f)))))
+          (gtk-warn "Can't find any files")
+          #f)
+        (begin
+          ; These are stolen from onodera's neet source
+          (define regexes
+            (map (lambda (r) (irregex (format #f r num)))
+                 (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
+                       "( |_|-|#|\\.)[0 ]*~A[^0-9]"
+                       "(^|[^0-9])[0 ]*~A[^0-9]"
+                       "~A[^0-9]")))
+          (define all-regexes regexes)
+
+          (define (find-file file-list regexes)
+            (if (null? regexes)
+              #f
+              (let ((matches
+                      (filter (lambda (s) (irregex-search (car regexes) s))
+                              file-list)))
+                (if (null? matches)
+                  (find-file file-list (cdr regexes))
+                  (car matches)))))
+          (define f (find-file file-list regexes))
+
+          (if f
+            (format #f "~A~A" dir f)
+            (begin
+              (gtk-warn "File not found")
+              #f)))))))
 
 (define (watch id)
   (define item (get-item db id))
@@ -783,8 +788,7 @@ EOF
                               (get-default-video-player db)))
       (define cmd-string
         (append (string-split video-player) (list fn)))
-      (process-run (car cmd-string) (cdr cmd-string)))
-    (gtk-warn "Couldn't find your file")))
+      (process-run (car cmd-string) (cdr cmd-string)))))
 
 ; Add New screen
 
