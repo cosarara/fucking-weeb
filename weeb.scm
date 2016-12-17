@@ -223,7 +223,7 @@
          GtkMessageType  type,
          GtkButtonsType  buttons,
          const gchar    *message_format) {
-         gtk_message_dialog_new(parent, flags, type, buttons, "%s", message_format);
+         return gtk_message_dialog_new(parent, flags, type, buttons, "%s", message_format);
      }
 EOF
 )
