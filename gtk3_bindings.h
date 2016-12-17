@@ -349,14 +349,6 @@ typedef enum
   GTK_MESSAGE_OTHER
 } GtkMessageType;
 
-// let's pretend it's not variadic
-GtkWidget* gtk_message_dialog_new
-    (GtkWindow      *parent,
-     GtkDialogFlags  flags,
-     GtkMessageType  type,
-     GtkButtonsType  buttons,
-     const gchar    *message_format);
-
 gint
 gtk_dialog_run (GtkDialog *dialog);
 

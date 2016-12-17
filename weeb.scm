@@ -215,6 +215,18 @@
 (foreign-declare "#include <gtk/gtk.h>")
 
 (bind-file "gtk3_bindings.h")
+; Probably not the best way to do this.
+(bind* #<<EOF
+    GtkWidget* gtk_message_dialog_new_wrap
+        (GtkWindow      *parent,
+         GtkDialogFlags  flags,
+         GtkMessageType  type,
+         GtkButtonsType  buttons,
+         const gchar    *message_format) {
+         gtk_message_dialog_new(parent, flags, type, buttons, "%s", message_format);
+     }
+EOF
+)
 
 (define (clean-container box)
   (define children (gtk_container_get_children box))
@@ -560,7 +572,7 @@
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  (define confirm-dialog (gtk_message_dialog_new
+  (define confirm-dialog (gtk_message_dialog_new_wrap
                            window
                            0
                            GTK_MESSAGE_QUESTION
@@ -1161,7 +1173,7 @@
   (gtk_main_quit))
 
 (define (gtk-warn message)
-  (define dialog (gtk_message_dialog_new
+  (define dialog (gtk_message_dialog_new_wrap
                   window
                   0
                   GTK_MESSAGE_WARNING
@@ -1183,4 +1195,3 @@
 (gtk_main)
 
 (save-db)
-
