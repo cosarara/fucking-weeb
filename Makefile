@@ -5,10 +5,9 @@ all : weeb
 CFLAGS = "`pkg-config --cflags gtk+-3.0`"
 LDFLAGS = "`pkg-config --libs gtk+-3.0`"
 
-DESTDIR = /
 PREFIX = /opt
 INSTALL_DIR = $(DESTDIR)$(PREFIX)
-BINDIR = $(DESTDIR)usr/bin/
+BINDIR = $(DESTDIR)/usr/bin/
 
 weeb : weeb.scm gtk3_bindings.h
 	csc -vk weeb.scm -C $(CFLAGS) -L $(LDFLAGS)
