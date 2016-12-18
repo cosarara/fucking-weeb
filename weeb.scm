@@ -565,7 +565,7 @@ EOF
   (gtk_widget_set_hexpand path-picker 1)
   (gtk_grid_attach form path-label 0 1 1 1)
   (gtk_grid_attach form path-picker 1 1 3 1)
-  
+
   (define autoplay (get-autoplay db))
   (set! autoplay-checkbox (gtk_check_button_new_with_label "Autoplay"))
   (gtk_toggle_button_set_active autoplay-checkbox (if autoplay 1 0)) ; shouldn't this be handled by bind?
@@ -824,7 +824,7 @@ EOF
       #t)
     (begin
       (define item (get-item db id))
-      (set-curr-ep item (+ (get-curr-ep item) 1)) ; 
+      (set-curr-ep item (+ (get-curr-ep item) 1)) ;
       (watch id)
       (build-view-screen window id)
       #f)))
@@ -843,7 +843,7 @@ EOF
 
 (define (build-autoplay-next-episode-screen window id)
   (clean window)
-  
+
   (define item (get-item db id))
   (define ep (get-curr-ep item))
   (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
@@ -853,22 +853,22 @@ EOF
   (gtk_widget_set_margin_end box 20)
   (gtk_widget_set_margin_bottom box 20)
   (gtk_container_add window box)
-  
+
   ;(define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define title-label (make-title-label "Playing next on..."))
   ;(gtk_box_set_center_widget title-box title-label)
   (gtk_box_pack_start box title-label 0 0 0)
-  
+
   (define counter (make-counter-label "5")) ; TODO setting to default time
   (define timer (g_timeout_add_seconds 1 #$autoplay_count_down #f))
   (gtk_box_pack_start box counter 1 0 0)
-  
+
   (define stop-button (gtk_button_new_with_label "Stop"))
   (g_signal_connect stop-button "clicked" #$autoplay_stop_button #f)
   (gtk_box_pack_start box stop-button 0 0 0)
-  
+
   (set! autoplay-callback-data (list timer counter id))
-  
+
   (gtk_widget_show_all window))
 
 (define player-process '())
