@@ -102,10 +102,14 @@
   (set-cdr! (assoc 'path (cdr (assoc 'defaults db))) path))
 
 (define (get-autoplay db)
-  (cdr (assoc 'autoplay db)))
+  (let ((i (assoc 'autoplay db)))
+   (and i (cdr i))))
 
 (define (set-autoplay db autoplay)
-  (set-cdr! (assoc 'autoplay db) autoplay)) 
+  (let ((i (assoc 'autoplay db)))
+    (if i
+      (set-cdr! i autoplay)
+      (set! db (append! db (list (cons 'autoplay autoplay)))))))
 
 (define (get-item-list db)
   (cdr (assoc 'items db)))
@@ -515,7 +519,7 @@ EOF
   (if selected-path
     (set-default-path db selected-path))
   (define autoplay (gtk_toggle_button_get_active autoplay-checkbox))
-  (set-autoplay db (if autoplay #t #f))
+  (set-autoplay db (= autoplay 1))
   (build-main-screen window))
 
 (define-external
