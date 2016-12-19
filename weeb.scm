@@ -804,19 +804,22 @@ EOF
     ((pointer "GtkWidget") widget)
     (c-pointer data))
   void
-  (define timer (car autoplay-callback-data))
-  (define label (car (cdr autoplay-callback-data)))
-  (define id (car (cdr (cdr autoplay-callback-data))))
+  (define id (data->id data))
+  (define callback-data (cdr (assoc id autoplay-callback-data)))
+  (define timer (car callback-data))
+  (define label (car (cdr callback-data)))
   (g_source_remove timer)
+  (alist-delete! id autoplay-callback-data)
   (build-view-screen window id))
 
 (define-external
   (autoplay_count_down
     (c-pointer data))
   bool
-  (define timer (car autoplay-callback-data))
-  (define label (car (cdr autoplay-callback-data)))
-  (define id (car (cdr (cdr autoplay-callback-data))))
+  (define id (data->id data))
+  (define callback-data (cdr (assoc id autoplay-callback-data)))
+  (define timer (car callback-data))
+  (define label (car (cdr callback-data)))
   (define counter (string->number (gtk_label_get_text label)))
   (if (> counter 0)
     (begin
@@ -824,7 +827,7 @@ EOF
       #t)
     (begin
       (define item (get-item db id))
-      (set-curr-ep item (+ (get-curr-ep item) 1)) ;
+      (set-curr-ep item (+ (get-curr-ep item) 1))
       (watch id)
       (build-view-screen window id)
       #f)))
@@ -860,36 +863,39 @@ EOF
   (gtk_box_pack_start box title-label 0 0 0)
 
   (define counter (make-counter-label "5")) ; TODO setting to default time
-  (define timer (g_timeout_add_seconds 1 #$autoplay_count_down #f))
+  (define timer (g_timeout_add_seconds 1 #$autoplay_count_down (address->pointer id)))
   (gtk_box_pack_start box counter 1 0 0)
 
   (define stop-button (gtk_button_new_with_label "Stop"))
-  (g_signal_connect stop-button "clicked" #$autoplay_stop_button #f)
+  (g_signal_connect stop-button "clicked" #$autoplay_stop_button (address->pointer id))
   (gtk_box_pack_start box stop-button 0 0 0)
 
-  (set! autoplay-callback-data (list timer counter id))
+  (set! autoplay-callback-data (alist-cons id (list timer counter) autoplay-callback-data))
 
   (gtk_widget_show_all window))
 
-(define player-process '())
+(define player-processes '())
 
 (define-external
   (player_process_end
     (c-pointer data))
   bool
+  (define player-process (data->id data))
+  (define id (cdr (assoc player-process player-processes)))
   (define autoplay (get-autoplay db))
-  (define id (data->id data))
   (define item (get-item db id))
   (receive (pid normal status) (process-wait player-process #t)
     (if (and (= pid player-process) ; process-wait will return 0 if the process hasn't finished.
          (<= (+ (get-curr-ep item) 1) (get-total-eps item))
          autoplay)
-      (begin (build-autoplay-next-episode-screen window (data->id data)) #f)
+      (begin
+        (build-autoplay-next-episode-screen window id)
+        (alist-delete! player-process player-processes)
+        #f)
       #t)))
 
-(define (wait-for-player pid id)
-  (begin
-    (g_timeout_add_seconds 1 #$player_process_end (address->pointer id))))
+(define (wait-for-player pid)
+  (g_timeout_add_seconds 1 #$player_process_end (address->pointer pid)))
 
 (define (watch id)
   (define item (get-item db id))
@@ -904,10 +910,10 @@ EOF
                               (get-default-video-player db)))
       (define cmd-string
         (append (string-split video-player) (list fn)))
-      (set! player-process
-        (process-run (car cmd-string) (cdr cmd-string)))
+      (define player-process (process-run (car cmd-string) (cdr cmd-string)))
+      (set! player-processes (alist-cons player-process id player-processes))
       (if autoplay
-        (wait-for-player player-process id))))) ; I tried using threads, it doesn't work.
+        (wait-for-player player-process))))) ; I tried using threads, it doesn't work.
 
 ; Add New screen
 
