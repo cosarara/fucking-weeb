@@ -40,6 +40,7 @@
 (use lolevel)
 (use srfi-1)
 (use srfi-13)
+(use srfi-18)
 (use posix)
 (use irregex)
 (use http-client)
@@ -52,6 +53,7 @@
 
 ; default when no db
 (define db '((version 0)
+             (autoplay . #t)
              (defaults
                (video-player . "mpv")
                (path . "/home/jaume/videos/series/"))
@@ -98,6 +100,16 @@
 
 (define (set-default-path db path)
   (set-cdr! (assoc 'path (cdr (assoc 'defaults db))) path))
+
+(define (get-autoplay db)
+  (let ((i (assoc 'autoplay db)))
+   (and i (cdr i))))
+
+(define (set-autoplay db autoplay)
+  (let ((i (assoc 'autoplay db)))
+    (if i
+      (set-cdr! i autoplay)
+      (set! db (append! db (list (cons 'autoplay autoplay)))))))
 
 (define (get-item-list db)
   (cdr (assoc 'items db)))
@@ -527,6 +539,8 @@ EOF
   (set-default-video-player db video-player)
   (if selected-path
     (set-default-path db selected-path))
+  (define autoplay (gtk_toggle_button_get_active autoplay-checkbox))
+  (set-autoplay db (= autoplay 1))
   (build-main-screen window))
 
 (define-external
@@ -572,6 +586,11 @@ EOF
   (gtk_widget_set_hexpand path-picker 1)
   (gtk_grid_attach form path-label 0 1 1 1)
   (gtk_grid_attach form path-picker 1 1 3 1)
+
+  (define autoplay (get-autoplay db))
+  (set! autoplay-checkbox (gtk_check_button_new_with_label "Autoplay"))
+  (gtk_toggle_button_set_active autoplay-checkbox (if autoplay 1 0)) ; shouldn't this be handled by bind?
+  (gtk_grid_attach form autoplay-checkbox 0 2 1 1)
 
   (define button-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
   (define add-button (gtk_button_new_with_label "Save"))
@@ -809,10 +828,116 @@ EOF
            (gtk-warn "File not found")
            #f))))))
 
-(define (watch id)
+; autoplay counter
+; TODO find a better way of passing this data to the callbacks. At least this won't give segfaults.
+(define autoplay-callback-data '())
+
+(define-external
+  (autoplay_stop_button
+    ((pointer "GtkWidget") widget)
+    (c-pointer data))
+  void
+  (define id (data->id data))
+  (define item (get-item db id))
+  (define timer (car autoplay-callback-data))
+  (define label (cadr autoplay-callback-data))
+  (define episode (cadr (cdr autoplay-callback-data)))
+  (g_source_remove timer)
+  (set! autoplay-callback-data '())
+  (set-curr-ep item episode)
+  (build-view-screen window id))
+
+(define-external
+  (autoplay_count_down
+    (c-pointer data))
+  bool
+  (define id (data->id data))
+  (define timer (car autoplay-callback-data))
+  (define label (cadr autoplay-callback-data))
+  (define episode (cadr (cdr autoplay-callback-data)))
+  (define counter (string->number (gtk_label_get_text label)))
+  (if (> counter 0)
+    (begin
+      (gtk_label_set_text label (number->string (- counter 1)))
+      #t)
+    (begin
+      (watch-episode id (+ episode 1))
+      (build-view-screen window id)
+      #f)))
+
+(define (make-counter-label text)
+  (define counter-label (gtk_label_new text))
+  ;(gtk_label_set_xalign title-label 0)
+  (define counter-attrs (pango_attr_list_new))
+  (define attr-weight (pango_attr_weight_new PANGO_WEIGHT_BOLD))
+  (pango_attr_list_insert counter-attrs attr-weight)
+  (define attr-scale (pango_attr_scale_new 10))
+  (pango_attr_list_insert counter-attrs attr-scale)
+  (gtk_label_set_attributes counter-label counter-attrs)
+  (pango_attr_list_unref counter-attrs)
+  counter-label)
+
+(define (build-autoplay-next-episode-screen window id episode)
+  (clean window)
+
+  (define item (get-item db id))
+  (define ep (get-curr-ep item))
+  (define box (gtk_box_new GTK_ORIENTATION_VERTICAL 0))
+  (gtk_box_set_spacing box 10)
+  (gtk_widget_set_margin_top box 20)
+  (gtk_widget_set_margin_start box 20)
+  (gtk_widget_set_margin_end box 20)
+  (gtk_widget_set_margin_bottom box 20)
+  (gtk_container_add window box)
+
+  ;(define title-box (gtk_box_new GTK_ORIENTATION_HORIZONTAL 0))
+  (define title-label (make-title-label "Playing next on..."))
+  ;(gtk_box_set_center_widget title-box title-label)
+  (gtk_box_pack_start box title-label 0 0 0)
+
+  (define counter (make-counter-label "5")) ; TODO setting to default time
+  (define timer (g_timeout_add_seconds 1 #$autoplay_count_down (address->pointer id)))
+  (gtk_box_pack_start box counter 1 0 0)
+
+  (define stop-button (gtk_button_new_with_label "Stop"))
+  (g_signal_connect stop-button "clicked" #$autoplay_stop_button (address->pointer id))
+  (gtk_box_pack_start box stop-button 0 0 0)
+
+  (set! autoplay-callback-data (list timer counter episode))
+
+  (gtk_widget_show_all window))
+
+(define player-process '())
+
+(define-external
+  (player_process_end
+    (c-pointer data))
+  bool
+  (define id (data->id data))
+  (define process-id (car player-process))
+  (define episode (cadr player-process))
+  (define autoplay (get-autoplay db))
+  (define item (get-item db id))
+  (receive (pid normal status) (process-wait process-id #t)
+    (if (and (= pid process-id) ; process-wait will return 0 if the process hasn't finished.
+         autoplay)
+      (begin
+        (if (> (+ episode 1) (get-total-eps item))
+          (set-curr-ep item (get-total-eps item)) ; finished series, update total.
+          (begin
+            (set! player-process '())
+            (build-autoplay-next-episode-screen window id episode)))
+        #f)
+      #t)))
+
+(define (wait-for-player id)
+  (g_timeout_add_seconds 1 #$player_process_end (address->pointer id)))
+
+(define (watch-episode id episode)
   (define item (get-item db id))
   (define dir (get-path item))
-  (define fn (find-ep dir (get-curr-ep item)))
+  (define autoplay (get-autoplay db))
+  (define fn (find-ep dir episode))
   (if fn
     (begin
       (printf "watch ~A ~A ~A~%"
@@ -821,7 +946,16 @@ EOF
                               (get-default-video-player db)))
       (define cmd-string
         (append (string-split video-player) (list fn)))
-      (process-run (car cmd-string) (cdr cmd-string)))))
+      (define process-id (process-run (car cmd-string) (cdr cmd-string)))
+      (if (and autoplay
+           (null? player-process))
+        (begin
+          (set! player-process (list process-id episode))
+          (wait-for-player id))))))
+
+(define (watch id)
+  (define item (get-item db id))
+  (watch-episode id (get-curr-ep item)))
 
 ; Add New screen
 

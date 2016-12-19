@@ -141,6 +141,19 @@ gtk_window_new (GtkWindowType type);
 int g_signal_connect(void *, char *, void *, void *);
 int g_signal_connect_swapped(void *, char *, void *, void *);
 
+guint
+g_timeout_add (guint interval,
+               void * function,
+               void * data);
+
+guint
+g_timeout_add_seconds (guint interval,
+                       void * function,
+                       void * data);
+
+gboolean
+g_source_remove (guint tag);
+
 ___safe int g_application_run
 (GApplication *application, int argc, char **argv);
 
@@ -165,6 +178,16 @@ gtk_container_add (GtkContainer *container,
 
 GtkWidget *
 gtk_button_new_with_label (const gchar *label);
+
+GtkWidget *
+gtk_check_button_new_with_label (const gchar *label);
+
+gboolean
+gtk_toggle_button_get_active (GtkToggleButton *toggle_button);
+
+void
+gtk_toggle_button_set_active (GtkToggleButton *toggle_button,
+                              gboolean active);
 
 void
 gtk_window_set_title (GtkWindow *window,
@@ -205,6 +228,14 @@ gtk_box_set_center_widget (GtkBox *box,
 
 GtkWidget *
 gtk_label_new (const gchar *str);
+
+
+const gchar *
+gtk_label_get_text (GtkLabel *label);
+
+void
+gtk_label_set_text (GtkLabel *label,
+                    const gchar *str);
 
 void
 gtk_box_set_spacing (GtkBox *box,
