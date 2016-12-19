@@ -196,7 +196,7 @@
                   ; I shall assume $HOME is always defined
                   (format "~A/.config"
                           (get-environment-variable "HOME"))))
-            xdg-app-name)))
+            xdg-app-name) #t))
 
 (define xdg-data
   (create-directory
@@ -206,7 +206,7 @@
                   ; I shall assume $HOME is always defined
                   (format "~A/.local/share"
                           (get-environment-variable "HOME"))))
-            xdg-app-name)))
+            xdg-app-name) #t))
 
 (define (save-db)
   (call-with-output-file (format #f "~Adb" xdg-config)
