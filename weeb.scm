@@ -805,11 +805,13 @@ EOF
     (c-pointer data))
   void
   (define id (data->id data))
-  (define callback-data (cdr (assoc id autoplay-callback-data)))
-  (define timer (car callback-data))
-  (define label (car (cdr callback-data)))
+  (define item (get-item db id))
+  (define timer (car autoplay-callback-data))
+  (define label (cadr autoplay-callback-data))
+  (define episode (cadr (cdr autoplay-callback-data)))
   (g_source_remove timer)
-  (alist-delete! id autoplay-callback-data)
+  (set! autoplay-callback-data '())
+  (set-curr-ep item episode)
   (build-view-screen window id))
 
 (define-external
@@ -817,18 +819,16 @@ EOF
     (c-pointer data))
   bool
   (define id (data->id data))
-  (define callback-data (cdr (assoc id autoplay-callback-data)))
-  (define timer (car callback-data))
-  (define label (car (cdr callback-data)))
+  (define timer (car autoplay-callback-data))
+  (define label (cadr autoplay-callback-data))
+  (define episode (cadr (cdr autoplay-callback-data)))
   (define counter (string->number (gtk_label_get_text label)))
   (if (> counter 0)
     (begin
       (gtk_label_set_text label (number->string (- counter 1)))
       #t)
     (begin
-      (define item (get-item db id))
-      (set-curr-ep item (+ (get-curr-ep item) 1))
-      (watch id)
+      (watch-episode id (+ episode 1))
       (build-view-screen window id)
       #f)))
 
@@ -844,7 +844,7 @@ EOF
   (pango_attr_list_unref counter-attrs)
   counter-label)
 
-(define (build-autoplay-next-episode-screen window id)
+(define (build-autoplay-next-episode-screen window id episode)
   (clean window)
 
   (define item (get-item db id))
@@ -870,38 +870,41 @@ EOF
   (g_signal_connect stop-button "clicked" #$autoplay_stop_button (address->pointer id))
   (gtk_box_pack_start box stop-button 0 0 0)
 
-  (set! autoplay-callback-data (alist-cons id (list timer counter) autoplay-callback-data))
+  (set! autoplay-callback-data (list timer counter episode))
 
   (gtk_widget_show_all window))
 
-(define player-processes '())
+(define player-process '())
 
 (define-external
   (player_process_end
     (c-pointer data))
   bool
-  (define player-process (data->id data))
-  (define id (cdr (assoc player-process player-processes)))
+  (define id (data->id data))
+  (define process-id (car player-process))
+  (define episode (cadr player-process))
   (define autoplay (get-autoplay db))
   (define item (get-item db id))
-  (receive (pid normal status) (process-wait player-process #t)
-    (if (and (= pid player-process) ; process-wait will return 0 if the process hasn't finished.
-         (<= (+ (get-curr-ep item) 1) (get-total-eps item))
+  (receive (pid normal status) (process-wait process-id #t)
+    (if (and (= pid process-id) ; process-wait will return 0 if the process hasn't finished.
          autoplay)
       (begin
-        (build-autoplay-next-episode-screen window id)
-        (alist-delete! player-process player-processes)
+        (if (> (+ episode 1) (get-total-eps item))
+          (set-curr-ep item (get-total-eps item)) ; finished series, update total.
+          (begin
+            (set! player-process '())
+            (build-autoplay-next-episode-screen window id episode)))
         #f)
       #t)))
 
-(define (wait-for-player pid)
-  (g_timeout_add_seconds 1 #$player_process_end (address->pointer pid)))
+(define (wait-for-player id)
+  (g_timeout_add_seconds 1 #$player_process_end (address->pointer id)))
 
-(define (watch id)
+(define (watch-episode id episode)
   (define item (get-item db id))
   (define dir (get-path item))
   (define autoplay (get-autoplay db))
-  (define fn (find-ep dir (get-curr-ep item)))
+  (define fn (find-ep dir episode))
   (if fn
     (begin
       (printf "watch ~A ~A ~A~%"
@@ -910,10 +913,16 @@ EOF
                               (get-default-video-player db)))
       (define cmd-string
         (append (string-split video-player) (list fn)))
-      (define player-process (process-run (car cmd-string) (cdr cmd-string)))
-      (set! player-processes (alist-cons player-process id player-processes))
-      (if autoplay
-        (wait-for-player player-process))))) ; I tried using threads, it doesn't work.
+      (define process-id (process-run (car cmd-string) (cdr cmd-string)))
+      (if (and autoplay
+           (null? player-process))
+        (begin
+          (set! player-process (list process-id episode))
+          (wait-for-player id))))))
+
+(define (watch id)
+  (define item (get-item db id))
+  (watch-episode id (get-curr-ep item)))
 
 ; Add New screen
 
