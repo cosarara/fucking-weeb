@@ -494,8 +494,29 @@ EOF
     (begin
       (define parts (irregex-split "/" selected-path))
       (if (not (null? parts))
-        (gtk_entry_set_text name-entry (prettify (last parts)))))))
-  ; TODO: automagically set number of episodes
+        (gtk_entry_set_text name-entry (prettify (last parts))))))
+  )
+  ;(define dir selected-path)
+  ;(if (not (directory? dir))
+  ;  (gtk-warn "Your directory doesn't look like a directory")
+  ;  (begin
+  ;    (define file-list (sort (directory dir #t) string<?))
+
+  ;    (if (not total-entry-changed)
+  ;      (begin
+  ;        (gtk_entry_set_text
+  ;          total-entry
+  ;          (number->string
+  ;            (do ([n 1 (+ n 1)])
+  ;              [(let ([m (find-ep selected-path n #t file-list)])
+  ;                 (if m
+  ;                   (and (set! file-list
+  ;                          (remove (lambda (i) (equal? m i))
+  ;                                  file-list))
+  ;                        #f)
+  ;                   #t))
+  ;               (- n 1)])))
+  ;        (set! total-entry-changed #f))))))
 
 (define-external
   (save_settings_button
@@ -592,6 +613,7 @@ EOF
     (c-pointer data))
   void
   (define id (data->id data))
+  (print id)
   (build-edit-screen window id))
 
 (define-external
@@ -739,42 +761,53 @@ EOF
 ; View screen helpers
 
 ; neet-like
-(define (find-ep dir num)
+(define (find-ep dir num #!optional quiet file-list)
   (set! dir (ensure-trailing-slash dir))
-  (if (not (directory? dir))
-    (gtk-warn "Your directory doesn't look like a directory")
-    (begin
-      (define file-list (directory dir #t))
-      (if (null? file-list)
-        (begin
-          (gtk-warn "Can't find any files")
-          #f)
-        (begin
-          ; These are stolen from onodera's neet source
-          (define regexes
-            (map (lambda (r) (irregex (format #f r num)))
-                 (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
-                       "( |_|-|#|\\.)[0 ]*~A[^0-9]"
-                       "(^|[^0-9])[0 ]*~A[^0-9]"
-                       "~A[^0-9]")))
-          (define all-regexes regexes)
+  (let ([gtk-warn (if quiet (lambda (s) #f) gtk-warn)])
+   (if (not file-list)
+     (if (not (directory? dir))
+       (gtk-warn "Your directory doesn't look like a directory")
+       (set! file-list (sort (directory dir #t) string<?))))
+   (if (null? file-list)
+     (begin
+       (gtk-warn "Can't find any files")
+       #f)
+     (begin
+       ; These are stolen from onodera's neet source
+       (define regexes
+         (map (lambda (r) (irregex (format #f r num)))
+              (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
+                    "( |_|-|#|\\.)[0 ]*~A[^0-9]"
+                    "(^|[^0-9])[0 ]*~A[^0-9]"
+                    "~A[^0-9]")))
+       (define all-regexes regexes)
 
-          (define (find-file file-list regexes)
-            (if (null? regexes)
-              #f
-              (let ((matches
-                      (filter (lambda (s) (irregex-search (car regexes) s))
-                              file-list)))
-                (if (null? matches)
-                  (find-file file-list (cdr regexes))
-                  (car matches)))))
-          (define f (find-file file-list regexes))
+       (define (find-file file-list regexes)
+         (if (null? regexes)
+           #f
+           (let*
+            ([r (car regexes)]
+             [matches
+              (map
+                cdr
+                (sort
+                  (filter
+                    car
+                    (map (lambda (s) (cons (irregex-search r s) s))
+                         file-list))
+                  (lambda (a b)
+                    (< (irregex-match-start-index (car a))
+                       (irregex-match-start-index (car b))))))])
+             (if (null? matches)
+               (find-file file-list (cdr regexes))
+               (car matches)))))
+       (define f (find-file file-list regexes))
 
-          (if f
-            (format #f "~A~A" dir f)
-            (begin
-              (gtk-warn "File not found")
-              #f)))))))
+       (if f
+         (format #f "~A~A" dir f)
+         (begin
+           (gtk-warn "File not found")
+           #f))))))
 
 (define (watch id)
   (define item (get-item db id))
@@ -926,6 +959,12 @@ EOF
       (set! selected-image-path file-name))
     (print "couldn't get image"))) ; todo handle this better
 
+(define-external
+ (total_entry_changed
+   ((pointer "GtkWidget") widget)
+   (c-pointer data))
+ void
+ (set! total-entry-changed #t))
 
 (define (add-edit-buttons form name path curr total video-player cover)
   (define name-label (gtk_label_new "Name:"))
@@ -983,7 +1022,9 @@ EOF
   (gtk_widget_set_hexpand curr-entry 1)
   (define eps-slash (gtk_label_new "/"))
   (set! total-entry (gtk_entry_new))
+  (g_signal_connect total-entry "changed" #$total_entry_changed #f)
   (gtk_entry_set_text total-entry total)
+  (set! total-entry-changed #f)
   (gtk_widget_set_hexpand total-entry 1)
   (gtk_grid_attach form eps-label 0 3 1 1)
   (gtk_grid_attach form curr-entry 1 3 1 1)
@@ -1007,6 +1048,7 @@ EOF
 
 (define curr-entry #f)
 (define total-entry #f)
+(define total-entry-changed #f)
 (define video-player-entry #f)
 
 (define (prettify name)
@@ -1108,6 +1150,12 @@ EOF
     ((foreign-lambda c-pointer
                      "gtk_selection_data_get_text"
                      c-pointer) selection)))
+
+(define (my_gtk_file_chooser_get_filename widget)
+  (get-g-string*
+    ((foreign-lambda c-pointer
+                     "gtk_file_chooser_get_filename"
+                     c-pointer) widget)))
 
 ; note that gtk_entry_get_text doesn't return a copy, so we must not
 ; call g_free on it's returned pointer
