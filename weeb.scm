@@ -794,9 +794,13 @@ EOF
      (begin
        ; These are stolen from onodera's neet source
        (define regexes
-         (map (lambda (r) (irregex (format #f r num)))
-              (list "(e|ep|episode|第)[0 ]*~A[^0-9]"
+         (map (lambda (r) (irregex (format #f r num) 'i))
+              (list "(ep|episode|第)[0 ]*~A[^0-9].*\\.(mkv|mp4|avi|mpg|sfv)"
+                    "(e|ep|episode|第)[0 ]*~A[^0-9]"
+                    "(_|-|#|\\.)0+~A[^0-9]"
+                    "( |_|-|#|\\.)0+~A[^0-9]"
                     "( |_|-|#|\\.)[0 ]*~A[^0-9]"
+                    "(^|[^0-9])0*~A[^0-9]"
                     "(^|[^0-9])[0 ]*~A[^0-9]"
                     "~A[^0-9]")))
        (define all-regexes regexes)
