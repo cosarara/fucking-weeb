@@ -787,7 +787,7 @@ EOF
      (if (not (directory? dir))
        (gtk-warn "Your directory doesn't look like a directory")
        (set! file-list (sort (directory dir #t) string<?))))
-   (if (null? file-list)
+   (if (or (not file-list) (null? file-list))
      (begin
        (gtk-warn "Can't find any files")
        #f)
@@ -803,25 +803,22 @@ EOF
                     "(^|[^0-9])0*~A[^0-9]"
                     "(^|[^0-9])[0 ]*~A[^0-9]"
                     "~A[^0-9]")))
-       (define all-regexes regexes)
 
        (define (find-file file-list regexes)
          (if (null? regexes)
            #f
            (let*
             ([r (car regexes)]
-             [matches
-              (map
-                cdr
-                (sort
-                  (filter
-                    car
-                    (map (lambda (s) (cons (irregex-search r s) s))
-                         file-list))
-                  (lambda (a b)
-                    (< (irregex-match-start-index (car a))
-                       (irregex-match-start-index (car b))))))])
-             (if (null? matches)
+             ; given a filename s, position where regex matches, or false
+             [score (lambda (s)
+                      (let ([m (irregex-search r s)])
+                        (and m (irregex-match-start-index m))))]
+             ; filenames -> (score . filename)
+             [matched (map (lambda (s) (cons (score s) s))
+                         file-list)]
+             [matches (map cdr (sort (filter car matched)
+                                     (lambda (a b) (< (car a) (car b)))))])
+            (if (null? matches)
                (find-file file-list (cdr regexes))
                (car matches)))))
        (define f (find-file file-list regexes))
@@ -831,6 +828,16 @@ EOF
          (begin
            (gtk-warn "File not found")
            #f))))))
+
+(define (test-eps dir maxn)
+  (print dir)
+  (set! dir (ensure-trailing-slash dir))
+  (define matches
+    (do ((file-list (sort (directory dir #t) string<?))
+         (num 1 (+ 1 num))
+         (matches '() (cons (cons (find-ep dir num #t) num) matches)))
+      ((= num maxn)
+       matches))))
 
 ; autoplay counter
 ; TODO find a better way of passing this data to the callbacks. At least this won't give segfaults.
@@ -1375,7 +1382,13 @@ EOF
 (gtk_init #f #f)
 (define window (gtk_window_new GTK_WINDOW_TOPLEVEL))
 (condition-case (load-db)
-  [(exn file i/o) (gtk-warn "Couldn't load the database file; using sample")])
+  [e (exn file i/o) (begin (gtk-warn "Couldn't load the database file; using sample")
+                           (print ((condition-property-accessor 'exn 'message) e)))])
+
+; test everything!
+;(map (lambda (item) (map print (test-eps (get-path item) (get-total-eps item))))
+;     (get-item-list db))
+
 (g_signal_connect window "destroy" #$destroy #f)
 ;(gtk_window_set_type_hint window GDK_WINDOW_TYPE_HINT_DIALOG)
 (gtk_window_set_title window app-title)
