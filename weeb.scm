@@ -67,21 +67,29 @@
                 (name . "eva")
                 (path . "/home/jaume/videos/series/0-Sorted/neon_genesis_evangelion-1080p-renewal_cat")))))
 
-;
 ; black magic
+; nah nah alright let's explain this
+; call/cc
+;     call/cc calls that function it takes as an argument,
+;     passing it that "return" function.
+;     Calling return does an early return. Easy.
+; Now on this thing.
+; It takes a path, such as '(defaults video-player) and the db,
+; and it gets you the value at that path.
+
 (define (get-db-node path db)
-  (define node-p (cons db #f)) ; this is a box
+  (define node-p db)
   (define val
     (call/cc ; should we just catch the exception at trying to cdr #f?
       (lambda (return)
         (for-each
           (lambda (name)
-            (define a (assoc name (car node-p)))
+            (define a (assoc name node-p))
             (if a
-              (set-car! node-p (cdr a))
+              (set! node-p (cdr a))
               (return #f)))
           path)
-        (car node-p))))
+        node-p)))
   (or val
       (begin
         ; TODO: handle error

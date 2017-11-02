@@ -1,6 +1,6 @@
 
 pkgname=weeb-git
-pkgver=r40.872c920
+pkgver=r68.a819688
 pkgrel=1
 pkgdesc="A library manager for anime and series"
 arch=("i686" "x86_64")
