@@ -36,16 +36,32 @@
 ; have some callbacks (or not), then the actual function
 ; implementing the feature (rendering a screen or whatever).
 
-(require-extension bind)
-(use lolevel)
-(use srfi-1)
-(use srfi-13)
-(use srfi-18)
-(use posix)
-(use irregex)
-(use http-client)
-(use uri-common)
-(use medea)
+(module fucking-weeb ()
+
+(import scheme)
+(import chicken.base)
+;(import chicken.syntax)
+
+(import bind)
+;(import lolevel)
+(import srfi-1)
+(import srfi-13)
+(import srfi-18)
+;(import posix)
+(import chicken.process)
+(import chicken.process-context)
+(import chicken.format)
+(import chicken.irregex)
+(import chicken.file)
+(import chicken.condition)
+(import chicken.foreign)
+(import chicken.platform)
+(import chicken.sort)
+(import chicken.string)
+(import chicken.io)
+(import http-client)
+(import uri-common)
+(import medea)
 
 (define app-title "Fucking weeb")
 
@@ -95,7 +111,8 @@
         ; TODO: handle error
         (print "bad bad")
         (print path)
-        (print db))))
+        (print db)
+        "undefined")))
 
 (define (get-default-video-player db)
   (get-db-node '(defaults video-player) db))
@@ -316,7 +333,7 @@ EOF
     s-css-provider
     (if (file-exists? "search.css")
       "search.css"
-      (format #f "~A/search.css" (repository-path))) #f)
+      (format #f "~A/search.css" (installation-repository))) #f)
   (gtk_style_context_add_provider
     search-bar-sc s-css-provider
     GTK_STYLE_PROVIDER_PRIORITY_APPLICATION)
@@ -481,10 +498,26 @@ EOF
 
 ; Poster List helpers
 
-(define (data->id data)
- (if data
-   (pointer->address data)
-   0))
+;(define (data->id data)
+; (if data
+;   (pointer->address data)
+;   0))
+;(define (data->id data)
+;  (foreign-value "(int)id" int))
+(define data->id
+  (foreign-lambda*
+    integer64
+    ((c-pointer a0))
+    "C_return((int64_t)(a0));"))
+
+(define address->pointer
+  (foreign-lambda*
+    c-pointer
+    ((integer64 a0))
+    "C_return((void*)(a0));"))
+
+;(define (address->pointer id)
+;  (foreign-value "(void*)id" c-pointer))
 
 (define-external
   (go_view
@@ -500,6 +533,8 @@ EOF
 
 (define cover-images '())
 
+(define autoplay-checkbox #f)
+
 ; Settings Scren
 
 (define-external
@@ -511,13 +546,13 @@ EOF
     (gtk_file_chooser_get_filename widget))
   ; todo: copy string to scheme then free c string with g_free
   (if (equal? "" (gtk_entry_get_text name-entry))
-    (begin
-      (define parts (irregex-split "/" selected-path))
+    (let
+      ((parts (irregex-split "/" selected-path)))
       (if (not (null? parts))
         (gtk_entry_set_text name-entry (prettify (last parts))))))
   )
   ;(define dir selected-path)
-  ;(if (not (directory? dir))
+  ;(if (not (directory-exists? dir))
   ;  (gtk-warn "Your directory doesn't look like a directory")
   ;  (begin
   ;    (define file-list (sort (directory dir #t) string<?))
@@ -629,8 +664,8 @@ EOF
   (define response (gtk_dialog_run confirm-dialog))
   (gtk_widget_destroy confirm-dialog)
   (if (= response GTK_RESPONSE_OK)
-    (begin
-      (define id (data->id data))
+    (let
+      ((id (data->id data)))
       (set! db (remove-item db id))
       (build-main-screen window))))
 
@@ -787,32 +822,8 @@ EOF
 
 ; View screen helpers
 
-; neet-like
-(define (find-ep dir num #!optional quiet file-list)
-  (set! dir (ensure-trailing-slash dir))
-  (let ([gtk-warn (if quiet (lambda (s) #f) gtk-warn)])
-   (if (not file-list)
-     (if (not (directory? dir))
-       (gtk-warn "Your directory doesn't look like a directory")
-       (set! file-list (sort (directory dir #t) string<?))))
-   (if (or (not file-list) (null? file-list))
-     (begin
-       (gtk-warn "Can't find any files")
-       #f)
-     (begin
-       ; These are stolen from onodera's neet source
-       (define regexes
-         (map (lambda (r) (irregex (format #f r num) 'i))
-              (list "(ep|episode|第)[0 ]*~A[^0-9].*\\.(mkv|mp4|avi|mpg|sfv)"
-                    "(e|ep|episode|第)[0 ]*~A[^0-9]"
-                    "(_|-|#|\\.)0+~A[^0-9]"
-                    "( |_|-|#|\\.)0+~A[^0-9]"
-                    "( |_|-|#|\\.)[0 ]*~A[^0-9]"
-                    "(^|[^0-9])0*~A[^0-9]"
-                    "(^|[^0-9])[0 ]*~A[^0-9]"
-                    "~A[^0-9]")))
 
-       (define (find-file file-list regexes)
+(define (find-file file-list regexes)
          (if (null? regexes)
            #f
            (let*
@@ -829,7 +840,32 @@ EOF
             (if (null? matches)
                (find-file file-list (cdr regexes))
                (car matches)))))
-       (define f (find-file file-list regexes))
+
+; neet-like
+(define (find-ep dir num #!optional quiet file-list)
+  (set! dir (ensure-trailing-slash dir))
+  (let ([gtk-warn (if quiet (lambda (s) #f) gtk-warn)])
+   (if (not file-list)
+     (if (not (directory-exists? dir))
+       (gtk-warn "Your directory doesn't look like a directory")
+       (set! file-list (sort (directory dir #t) string<?))))
+   (if (or (not file-list) (null? file-list))
+     (begin
+       (gtk-warn "Can't find any files")
+       #f)
+     (let*
+       ; These are stolen from onodera's neet source
+       ((regexes
+         (map (lambda (r) (irregex (format #f r num) 'i))
+              (list "(ep|episode|第)[0 ]*~A[^0-9].*\\.(mkv|mp4|avi|mpg|sfv)"
+                    "(e|ep|episode|第)[0 ]*~A[^0-9]"
+                    "(_|-|#|\\.)0+~A[^0-9]"
+                    "( |_|-|#|\\.)0+~A[^0-9]"
+                    "( |_|-|#|\\.)[0 ]*~A[^0-9]"
+                    "(^|[^0-9])0*~A[^0-9]"
+                    "(^|[^0-9])[0 ]*~A[^0-9]"
+                    "~A[^0-9]")))
+       (f (find-file file-list regexes)))
 
        (if f
          (format #f "~A~A" dir f)
@@ -961,16 +997,15 @@ EOF
     (begin
       (printf "watch ~A ~A ~A~%"
               (get-name item) (get-curr-ep item) fn)
-      (define video-player (or (get-video-player item)
-                              (get-default-video-player db)))
-      (define cmd-string
-        (append (string-split video-player) (list fn)))
-      (define process-id (process-run (car cmd-string) (cdr cmd-string)))
-      (if (and autoplay
-           (null? player-process))
-        (begin
-          (set! player-process (list process-id episode))
-          (wait-for-player id))))))
+      (let* ((video-player (or (get-video-player item)
+                               (get-default-video-player db)))
+             (cmd-string (append (string-split video-player) (list fn)))
+             (process-id (process-run (car cmd-string) (cdr cmd-string))))
+        (if (and autoplay
+                 (null? player-process))
+          (begin
+            (set! player-process (list process-id episode))
+            (wait-for-player id)))))))
 
 (define (watch id)
   (define item (get-item db id))
@@ -1255,25 +1290,24 @@ EOF
   (define results (cdr (assoc 'results response)))
   (if (= 0 (vector-length results))
     #f ; todo error out
-    (begin
-      (define result (vector-ref results 0))
-      (define poster-path (cdr (assoc 'poster_path result)))
+    (let*
+      ((result (vector-ref results 0))
+       (poster-path (cdr (assoc 'poster_path result))))
       (if (not base-url)
-        (begin
-          (define url (format #f "~Aconfiguration?~A"
+        (let*
+          ((url (format #f "~Aconfiguration?~A"
                               tmdb tmdb-key))
-          (define config
-            (read-json
-              (with-input-from-request url #f read-string)))
+           (config
+             (read-json
+               (with-input-from-request url #f read-string))))
           (set! base-url
             (cdr (assoc 'base_url (cdr (assoc 'images config)))))))
       (if (or (null? poster-path) (eqv? 'null poster-path))
         (and
           (gtk-warn "Couldn't find the poster in tmdb's response")
           #f)
-        (begin
-          (define image-url (format #f "~Aoriginal~A"
-                                    base-url poster-path))
+        (let ((image-url (format #f "~Aoriginal~A"
+                                    base-url poster-path)))
           (print image-url)
           (set! file-name (format #f "~A~A" file-name
                                   (get-extension poster-path)))
@@ -1320,28 +1354,27 @@ EOF
   (define protocol-match
     (irregex-search "^(.*)://(.*)" uri))
   (if protocol-match
-    (begin
-      (define protocol-name (irregex-match-substring
-                              protocol-match 1))
+    (let
+      ((protocol-name (irregex-match-substring
+                              protocol-match 1)))
       (printf "protocol ~A~%" protocol-name)
       (if (equal? protocol-name "file")
-        (begin
+        (let
           ;todo maybe copy to xdg_data?
-          (define path (irregex-match-substring
-                         protocol-match 2))
+          ((path (irregex-match-substring
+                         protocol-match 2)))
           (set-cover item (uri-decode-string path))
           (printf "path ~A~%" path)))
       (if (or (equal? protocol-name "http")
               (equal? protocol-name "https"))
         (begin
-          (define url uri)
-          (printf "url ~A~%" url)
-          (define file-name (format #f "~A~A~A"
+          (printf "url ~A~%" uri)
+          (let ((file-name (format #f "~A~A~A"
                                     xdg-data
                                     (clean-name (get-name item))
-                                    (get-extension url)))
-          (download-image url file-name)
-          (set-cover item file-name))))))
+                                    (get-extension uri))))
+            (download-image uri file-name)
+            (set-cover item file-name)))))))
 
 (define (update-cover-main-screen id)
   (print id)
@@ -1406,3 +1439,5 @@ EOF
 (gtk_main)
 
 (save-db)
+
+)

@@ -36,13 +36,16 @@ install : deployable
 	cp -r deploy_dir/* $(INSTALL_DIR)
 	ln -s $(PREFIX)/weeb/weeb $(BINDIR)/weeb
 
+
+export CHICKEN_REPOSITORY_PATH := $(PWD)/prefix
+export CHICKEN_INSTALL_REPOSITORY := $(PWD)/prefix
+export CHICKEN_INSTALL_PREFIX := $(PWD)/prefix
+
 deps-and-all :
 	rm -rf prefix
-	mkdir -p "prefix/lib/chicken/8/"
-	unset CHICKEN_REPOSITORY
-	chicken-install -init "prefix/lib/chicken/8"
-	export CHICKEN_REPOSITORY="prefix/lib/chicken/8"
-	chicken-install -p "prefix" bind http-client uri-common openssl medea
+	mkdir "prefix"
+	cp /var/lib/chicken/11/* prefix/
+	chicken-install bind http-client uri-common openssl medea
 	$(MAKE) deployable
 	rm deploy_dir/weeb/*.setup-info
 
